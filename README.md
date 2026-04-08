@@ -6,22 +6,43 @@ This is a __client-only__ port. It requires you set up and run a Deskflow __serv
 
 ## Before you start
 
-Set up a Deskflow server on the computer with your keyboard and mouse:
+Set up a Deskflow server on the computer with your keyboard and mouse.
 
 1. Download, install, and open [Deskflow](https://github.com/deskflow/deskflow/releases/latest).
 2. Click `Use this computer's keyboard...`, then `Configure Server`.
-3. Drag the screen icon in the top right to where your MiSTer display is in relation to your server's screen. It will initially be called `Unnamed`. Double-click to edit.
-4. Change the name to `mister`, then click 'Save'.
-5. Now click the `Advanced` tab.
-6. Enable `Use relative mouse movements` then click `OK`.
-7. Note the IP of your server as it's needed for MiSTer-side setup, then click `Start`.
+
+    <img width="429" height="174" alt="Step 2: Main window" src="https://github.com/user-attachments/assets/7e5c08db-50f4-415d-b644-5732245bb145" />
+
+3. Drag the screen icon in the top right to where your MiSTer display is in relation to your server's screen.
+
+    <img width="447" height="318" alt="Step 3: Drag new screen into layout" src="https://github.com/user-attachments/assets/6dbc727e-5064-425f-b0c2-c92b4a22e2be" />
+
+4. It will initially be called `Unnamed`. Double-click to edit.
+
+    <img width="447" height="318" alt="Step 4: Double-click 'Unnamed'" src="https://github.com/user-attachments/assets/f22ac99a-a8b5-42c8-a6d0-f8409182bc65" />
+
+5. Change the name to `mister`, then click 'Save'.
+
+    <img width="272" height="382" alt="Step 5: Rename to 'mister' and click 'Save'" src="https://github.com/user-attachments/assets/dec0f338-484f-4a7d-8103-d15121f92e5c" />
+
+6. Now click the `Advanced` tab.
+
+    <img width="447" height="322" alt="Step 6: Click 'Advanced'" src="https://github.com/user-attachments/assets/d1475df5-76b4-4db7-9ea2-b7bf998e0b11" />
+
+7. Check `Use relative mouse movements` then click `OK`.
+
+    <img width="446" height="317" alt="Step 7: Check 'use relative mouse movements'" src="https://github.com/user-attachments/assets/cb2d6b5c-b1de-4a87-ad8a-21b239479bb0" />
+
+8. Note the IP of your server as it's needed for MiSTer-side setup, then click `Start`.
+
+    <img width="429" height="174" alt="Step 8: Note IP and click 'Start'" src="https://github.com/user-attachments/assets/afeb8606-42b9-492a-b2a3-787fce2fd3fe" />
 
 For more detailed server-side setup documentation, see:
 
 - <https://deskflow.org>
 - <https://github.com/deskflow/deskflow/wiki>
 
-## Install on MiSTer
+## MiSTer client installation
 
 Download `deskflow.sh` into `/media/fat/Scripts` and make it executable:
 
