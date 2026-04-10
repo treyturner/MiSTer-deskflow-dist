@@ -62,7 +62,7 @@ For more detailed server-side setup documentation, see:
 
 ## MiSTer client installation
 
-1. Download `deskflow.sh` into `/media/fat/Scripts` and make it executable by pasting this block directly into a shell:
+1. Download `deskflow` into `/media/fat/Scripts` and make it executable by pasting this block directly into a shell:
 
     ```sh
     (
@@ -71,8 +71,8 @@ For more detailed server-side setup documentation, see:
         exit 1
       fi
 
-      url='https://raw.githubusercontent.com/treyturner/MiSTer-deskflow-dist/main/deskflow.sh'
-      dest='/media/fat/Scripts/deskflow.sh'
+      url='https://raw.githubusercontent.com/treyturner/MiSTer-deskflow-dist/main/deskflow'
+      dest='/media/fat/Scripts/deskflow'
 
       if curl -fsL -o "$dest" "$url" 2>/dev/null; then
         echo "Downloaded with system CA store."
@@ -102,8 +102,8 @@ For more detailed server-side setup documentation, see:
       fi
 
       # Define for reuse
-      url='https://raw.githubusercontent.com/treyturner/MiSTer-deskflow-dist/main/deskflow.sh'
-      dest='/media/fat/Scripts/deskflow.sh'
+      url='https://raw.githubusercontent.com/treyturner/MiSTer-deskflow-dist/main/deskflow'
+      dest='/media/fat/Scripts/deskflow'
 
       # MiSTer doesn't ship valid CA certs, but ignoring cert errors is risky.
       # Try fetching with curl as configured, however it's likely to fail SSL
@@ -137,25 +137,25 @@ For more detailed server-side setup documentation, see:
 1. Run the install, edit the config, then start the service:
 
     ```sh
-    deskflow.sh install
-    deskflow.sh configure-from-cli
-    deskflow.sh start
+    deskflow install
+    deskflow configure-from-cli
+    deskflow start
     ```
 
 1. Optional: autostart the service on interface up
 
     ```sh
-    deskflow.sh enable-autostart
+    deskflow enable-autostart
 
     # If you ever change your mind, run:
-    #deskflow.sh disable-autostart
+    #deskflow disable-autostart
     ```
 
 When installed, Deskflow lives under `/media/fat/Scripts/deskflow/`.
 
-## `deskflow.sh` commands
+## `deskflow` commands
 
-Run `deskflow.sh help` at any time for built-in usage text.
+Run `deskflow help` at any time for built-in usage text.
 
 Before Deskflow is installed, only `install` and `help` are available. The rest of the commands appear after the first successful install.
 
@@ -210,7 +210,7 @@ These are the settings most users will want to review:
 
 ## TLS and verification
 
-By default, Deskflow expects TLS to be enabled on the server. Both `deskflow.sh start` and `deskflow.sh run` launch the client with the saved fingerprint-trust mode, defaulting to `tofu` ([trust on first use](https://en.wikipedia.org/wiki/Trust_on_first_use)). The first successful TLS connection will be automatically trusted and its fingerprint saved automatically.
+By default, Deskflow expects TLS to be enabled on the server. Both `deskflow start` and `deskflow run` launch the client with the saved fingerprint-trust mode, defaulting to `tofu` ([trust on first use](https://en.wikipedia.org/wiki/Trust_on_first_use)). The first successful TLS connection will be automatically trusted and its fingerprint saved automatically.
 
 If your Deskflow server has TLS disabled entirely, add this to `/media/fat/Scripts/deskflow/deskflow.conf`:
 
@@ -222,14 +222,14 @@ tlsEnabled=false
 After that, start Deskflow normally with:
 
 ```sh
-deskflow.sh start
+deskflow start
 ```
 
 If your server still uses TLS but you want encrypted connections without fingerprint verification, set the persisted launch mode to `promiscuous`:
 
 ```sh
-deskflow.sh fingerprint-trust promiscuous
-deskflow.sh start
+deskflow fingerprint-trust promiscuous
+deskflow start
 ```
 
 Use `--fingerprint-trust promiscuous` only if you understand the security tradeoff. It keeps encryption enabled, but it does not verify that you are talking to the expected server.
@@ -237,19 +237,19 @@ Use `--fingerprint-trust promiscuous` only if you understand the security tradeo
 To go back to the default trust-on-first-use behavior:
 
 ```sh
-deskflow.sh fingerprint-trust tofu
+deskflow fingerprint-trust tofu
 ```
 
 If you want strict verification and only want to allow already-trusted server fingerprints:
 
 ```sh
-deskflow.sh fingerprint-trust strict
+deskflow fingerprint-trust strict
 ```
 
 You can check the current setting at any time with:
 
 ```sh
-deskflow.sh show-fingerprint-trust
+deskflow show-fingerprint-trust
 ```
 
 The selected mode is stored in:
@@ -258,7 +258,7 @@ The selected mode is stored in:
 /media/fat/Scripts/deskflow/.fingerprint-trust
 ```
 
-`deskflow.sh start`, `deskflow.sh run`, and autostart all respect the saved mode.
+`deskflow start`, `deskflow run`, and autostart all respect the saved mode.
 
 ## Usability tips
 
@@ -279,7 +279,7 @@ The selected mode is stored in:
 For live console output while connecting or debugging startup issues, use:
 
 ```sh
-deskflow.sh run
+deskflow run
 ```
 
 If Deskflow fails immediately on startup, check that your MiSTer exposes a writable `uinput` device:

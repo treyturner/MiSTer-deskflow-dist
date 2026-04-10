@@ -1,0 +1,501 @@
+#!/bin/sh
+# SPDX-FileCopyrightText: (C) 2026 Trey Turner
+# SPDX-License-Identifier: MIT
+
+# deskflow - MiSTer Deskflow entrypoint. Run 'deskflow help' for usage.
+
+set -eu
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow}"
+MISTER_DESKFLOW_PREVIEW_TOKEN="${MISTER_DESKFLOW_PREVIEW_TOKEN:-}"
+RELEASE_DIST_REPO="${RELEASE_DIST_REPO:-treyturner/MiSTer-deskflow-dist}"
+PREVIEW_DIST_REPO="${PREVIEW_DIST_REPO:-treyturner/MiSTer-deskflow-dist-preview}"
+RELEASE_DIST_RAW_BASE="${RELEASE_DIST_RAW_BASE:-https://raw.githubusercontent.com/${RELEASE_DIST_REPO}/main}"
+PREVIEW_DIST_API_BASE="${PREVIEW_DIST_API_BASE:-https://api.github.com/repos/${PREVIEW_DIST_REPO}/contents}"
+
+info() { printf '%s\n' "$*"; }
+error() { printf '%s\n' "$*" >&2; }
+die() { error "$*"; exit 1; }
+
+# Some MiSTer images only ship a flat CA bundle, while curl/OpenSSL default to
+# a hashed certificate directory. Point both at a readable bundle file when we
+# can find one so HTTPS bootstrap continues to work.
+configure_ssl_cert_env() {
+  local ca_bundle=""
+
+  if [ -n "${CURL_CA_BUNDLE:-}" ] && [ -r "${CURL_CA_BUNDLE}" ]; then
+    ca_bundle="${CURL_CA_BUNDLE}"
+  elif [ -n "${SSL_CERT_FILE:-}" ] && [ -r "${SSL_CERT_FILE}" ]; then
+    ca_bundle="${SSL_CERT_FILE}"
+  else
+    for ca_bundle in \
+      /etc/ssl/certs/cacert.pem \
+      /etc/ssl/cert.pem \
+      /etc/ssl/certs/ca-certificates.crt \
+      /etc/ssl/certs/ca-bundle.crt \
+      /etc/pki/tls/certs/ca-bundle.crt
+    do
+      if [ -r "${ca_bundle}" ]; then
+        break
+      fi
+      ca_bundle=""
+    done
+  fi
+
+  if [ -n "${ca_bundle}" ]; then
+    export SSL_CERT_FILE="${ca_bundle}"
+    export CURL_CA_BUNDLE="${ca_bundle}"
+  fi
+}
+
+configure_ssl_cert_env
+
+using_preview_selector() {
+  [ -n "${MISTER_DESKFLOW_PREVIEW_TOKEN}" ]
+}
+
+selector_url_for_channel() {
+  local channel=$1
+
+  if using_preview_selector; then
+    printf '%s/channels/%s.json\n' "${PREVIEW_DIST_API_BASE}" "${channel}"
+  else
+    printf '%s/channels/%s.json\n' "${RELEASE_DIST_RAW_BASE}" "${channel}"
+  fi
+}
+
+fetch_channel_selector() {
+  local channel=$1
+  local dest=$2
+  local selector_url
+  local selector_http
+
+  selector_url=$(selector_url_for_channel "${channel}")
+  info "Fetching channel selector: ${selector_url}"
+
+  if using_preview_selector; then
+    selector_http=$(curl -sSL \
+      -H "Authorization: Bearer ${MISTER_DESKFLOW_PREVIEW_TOKEN}" \
+      -H "Accept: application/vnd.github.raw+json" \
+      -o "${dest}" -w '%{http_code}' "${selector_url}")
+  else
+    selector_http=$(curl -sSL -o "${dest}" -w '%{http_code}' "${selector_url}")
+  fi
+
+  case "${selector_http}" in
+    200) ;;
+    401|403)
+      if using_preview_selector; then
+        die "Access denied fetching channel '${channel}' from preview dist. Is MISTER_DESKFLOW_PREVIEW_TOKEN valid?"
+      else
+        die "Access denied fetching channel '${channel}' from ${selector_url}"
+      fi
+      ;;
+    404)
+      if using_preview_selector; then
+        die "Channel '${channel}' not found in preview dist."
+      else
+        die "Channel '${channel}' not found at ${selector_url}"
+      fi
+      ;;
+    *)
+      if using_preview_selector; then
+        die "Failed to fetch channel selector from preview dist (HTTP ${selector_http})"
+      else
+        die "Failed to fetch channel selector from ${selector_url} (HTTP ${selector_http})"
+      fi
+      ;;
+  esac
+}
+
+show_help() {
+  printf 'MiSTer Deskflow - keyboard and mouse sharing for MiSTer FPGA\n'
+  printf '\n'
+  if [ -f "${INSTALL_DIR}/.channel" ]; then
+    printf 'Usage: deskflow <command> [args]\n'
+    printf '\n'
+    printf 'Commands:\n'
+    printf '  install [CHANNEL]    Install or reinstall (default channel: latest)\n'
+    printf '  update               Check and apply any available updates\n'
+    printf '  start                Start deskflow-core in the background\n'
+    printf '  run                  Run deskflow-core in the foreground\n'
+    printf '  stop                 Stop deskflow-core\n'
+    printf '  configure            Open GUI configuration\n'
+    printf '  configure-from-cli   Edit deskflow.conf in a text editor\n'
+    printf '  fingerprint-trust    Persist strict, tofu, or promiscuous for future launches\n'
+    printf '  show-fingerprint-trust  Show current fingerprint-trust mode\n'
+    printf '  enable-autostart     Enable automatic startup on network up\n'
+    printf '  disable-autostart    Disable automatic startup on network up\n'
+    printf '  remove               Stop and uninstall Deskflow\n'
+    printf '  status               Show channel, version, service state, and bundle info\n'
+    printf '  help                 Show this help\n'
+  else
+    printf 'Deskflow is not installed.\n'
+    printf '\n'
+    printf 'Usage: deskflow install [CHANNEL]\n'
+    printf '\n'
+    printf 'Commands:\n'
+    printf '  install [CHANNEL]    Download and install (default channel: latest)\n'
+    printf '  help                 Show this help\n'
+  fi
+}
+
+download() {
+  local url=$1
+  local dest=$2
+  if [ -n "${MISTER_DESKFLOW_PREVIEW_TOKEN}" ]; then
+    curl -fsSL --retry 3 -H "Authorization: Bearer ${MISTER_DESKFLOW_PREVIEW_TOKEN}" -o "${dest}" "${url}"
+  else
+    curl -fsSL --retry 3 -o "${dest}" "${url}"
+  fi
+}
+
+sha256_file() {
+  local f=$1
+  sha256sum "${f}" | cut -d' ' -f1
+}
+
+find_text_editor() {
+  if [ -n "${VISUAL:-}" ] && command -v "${VISUAL}" >/dev/null 2>&1; then
+    printf '%s\n' "${VISUAL}"
+    return 0
+  fi
+  if [ -n "${EDITOR:-}" ] && command -v "${EDITOR}" >/dev/null 2>&1; then
+    printf '%s\n' "${EDITOR}"
+    return 0
+  fi
+  if [ -e "${HOME}/.viminfo" ] && command -v vi >/dev/null 2>&1; then
+    printf 'vi\n'
+    return 0
+  fi
+  if command -v nano >/dev/null 2>&1; then
+    printf 'nano\n'
+    return 0
+  fi
+  if command -v vi >/dev/null 2>&1; then
+    printf 'vi\n'
+    return 0
+  fi
+  return 1
+}
+
+# Parse a top-level JSON string value by key.
+# Usage: json_get KEY FILE
+json_get() {
+  local key=$1
+  local file=$2
+  jq -r ".${key} // empty" "${file}"
+}
+
+# Parse a JSON string value from within a named subsection.
+# Usage: json_section_get SECTION KEY FILE
+json_section_get() {
+  local sec=$1
+  local key=$2
+  local file=$3
+  jq -r ".tracks.${sec}.${key} // .${sec}.${key} // empty" "${file}"
+}
+
+json_release_asset_api_url() {
+  local asset_name=$1
+  local file=$2
+  jq -r --arg name "${asset_name}" '.assets[] | select(.name == $name) | .url // empty' "${file}" | head -1
+}
+
+preview_release_metadata_file() {
+  local tag=$1
+  local safe_tag
+  safe_tag=$(printf '%s' "${tag}" | sed 's|[^A-Za-z0-9_.-]|_|g')
+  printf '%s/release-%s.json\n' "${WORK_DIR}" "${safe_tag}"
+}
+
+fetch_preview_release_metadata() {
+  local tag=$1
+  local dest=$2
+  local url="https://api.github.com/repos/${PREVIEW_DIST_REPO}/releases/tags/${tag}"
+  curl -fsSL --retry 3 \
+    -H "Authorization: Bearer ${MISTER_DESKFLOW_PREVIEW_TOKEN}" \
+    -o "${dest}" "${url}"
+}
+
+download_preview_release_asset() {
+  local tag=$1
+  local asset_name=$2
+  local dest=$3
+  local release_file
+  local asset_url
+
+  release_file=$(preview_release_metadata_file "${tag}")
+  if [ ! -f "${release_file}" ]; then
+    fetch_preview_release_metadata "${tag}" "${release_file}" \
+      || die "Failed to fetch preview release metadata for '${tag}'"
+  fi
+
+  asset_url=$(json_release_asset_api_url "${asset_name}" "${release_file}")
+  [ -n "${asset_url}" ] \
+    || die "Asset '${asset_name}' not found in preview release '${tag}'"
+
+  curl -fsSL --retry 3 \
+    -H "Authorization: Bearer ${MISTER_DESKFLOW_PREVIEW_TOKEN}" \
+    -H "Accept: application/octet-stream" \
+    -o "${dest}" "${asset_url}"
+}
+
+start_background() {
+  "${INSTALL_DIR}/run-deskflow" "$@" </dev/null >/dev/null 2>&1 &
+  info "Started deskflow-core in the background (PID $!)."
+}
+
+command="${1:-}"
+if [ -z "${command}" ]; then
+  show_help
+  exit 0
+fi
+shift
+
+case "${command}" in
+  install|help|--help|-h) ;;
+  *)
+    if [ ! -f "${INSTALL_DIR}/.channel" ]; then
+      if [ "${command}" = "remove" ]; then
+        info "Deskflow isn't installed. To remove this entrypoint, run:"
+        info "  rm ${0}"
+        exit 0
+      else
+        die "Deskflow isn't installed. Run 'deskflow install' first."
+      fi
+    fi
+    ;;
+esac
+
+case "${command}" in
+  install)
+    saved_channel=""
+    if [ -f "${INSTALL_DIR}/.channel" ]; then
+      saved_channel=$(cat "${INSTALL_DIR}/.channel")
+    fi
+    channel="${1:-${saved_channel:-latest}}"
+
+    WORK_DIR=$(mktemp -d)
+    trap 'rm -rf "${WORK_DIR}"' EXIT INT TERM
+
+    # ---------------------------------------------------------------------------
+    # Resolve manifest URL via channel selector
+    # ---------------------------------------------------------------------------
+
+    tmp_selector="${WORK_DIR}/selector.json"
+    fetch_channel_selector "${channel}" "${tmp_selector}"
+
+    manifest_url=$(json_get manifest_url "${tmp_selector}")
+    canonical_version=$(json_get canonical_version "${tmp_selector}")
+
+    if [ -z "${manifest_url}" ]; then
+      if [ -z "${MISTER_DESKFLOW_PREVIEW_TOKEN}" ]; then
+        die "No public release on '${channel}' yet. Set MISTER_DESKFLOW_PREVIEW_TOKEN to access preview builds."
+      else
+        die "manifest_url not found in channel selector for '${channel}'"
+      fi
+    fi
+    info "Resolved channel '${channel}' to ${canonical_version}"
+
+    # ---------------------------------------------------------------------------
+    # Fetch release manifest
+    # ---------------------------------------------------------------------------
+
+    info "Fetching release manifest: ${manifest_url}"
+
+    tmp_manifest="${WORK_DIR}/manifest.json"
+    if using_preview_selector; then
+      download_preview_release_asset "${canonical_version}" "release-manifest.json" "${tmp_manifest}" \
+        || die "Failed to fetch release manifest from preview dist for '${canonical_version}'"
+    else
+      download "${manifest_url}" "${tmp_manifest}" \
+        || die "Failed to fetch release manifest from ${manifest_url}"
+    fi
+
+    canonical_version=$(json_get canonical_version "${tmp_manifest}")
+    app_archive=$(json_section_get app archive "${tmp_manifest}")
+    app_sha256=$(json_section_get app sha256 "${tmp_manifest}")
+
+    [ -n "${canonical_version}" ] || die "canonical_version not found in manifest"
+    [ -n "${app_archive}" ]       || die "App archive name not found in manifest"
+
+    # Derive the release download base URL from the manifest URL
+    release_base=$(printf '%s' "${manifest_url}" | sed 's|/[^/]*$||')
+
+    # ---------------------------------------------------------------------------
+    # Download + verify app archive
+    # ---------------------------------------------------------------------------
+
+    info "Downloading app: ${app_archive}"
+    tmp_app="${WORK_DIR}/app.tar.gz"
+    if using_preview_selector; then
+      download_preview_release_asset "${canonical_version}" "${app_archive}" "${tmp_app}"
+    else
+      download "${release_base}/${app_archive}" "${tmp_app}"
+    fi
+
+    if [ -n "${app_sha256}" ]; then
+      actual=$(sha256_file "${tmp_app}")
+      [ "${actual}" = "${app_sha256}" ] \
+        || die "App archive SHA256 mismatch: expected ${app_sha256}, got ${actual}"
+    fi
+
+    # ---------------------------------------------------------------------------
+    # Extract app archive directly to INSTALL_DIR
+    # ---------------------------------------------------------------------------
+
+    # Stop any running deskflow-core before replacing binaries
+    if killall deskflow-core 2>/dev/null; then
+      info "Stopped running Deskflow process."
+    fi
+
+    mkdir -p "${INSTALL_DIR}"
+    info "Extracting app archive to ${INSTALL_DIR}"
+    tar -xzf "${tmp_app}" -C "${INSTALL_DIR}" --strip-components=1
+
+    # ---------------------------------------------------------------------------
+    # Delegate to the now-installed installer for runtime/xkb
+    # ---------------------------------------------------------------------------
+
+    sh "${INSTALL_DIR}/install-deskflow" "${manifest_url}"
+
+    printf '%s' "${channel}"           > "${INSTALL_DIR}/.channel"
+    printf '%s' "${canonical_version}" > "${INSTALL_DIR}/.installed-version"
+    ;;
+
+  remove)
+    if killall deskflow-core 2>/dev/null; then
+      info "Stopped running deskflow-core process."
+    fi
+    for hook in /etc/network/if-up.d/deskflow /etc/network/if-down.d/deskflow; do
+      if [ -f "${hook}" ]; then
+        rm -f "${hook}"
+        info "Removed ${hook}"
+      fi
+    done
+    if [ -d "${INSTALL_DIR}" ]; then
+      rm -rf "${INSTALL_DIR}"
+      info "Removed ${INSTALL_DIR}"
+    fi
+    info "Deskflow app, runtime bundles, and hooks are removed."
+    info "To further remove this entrypoint, run:"
+    info "  rm ${0}"
+    ;;
+
+  start)
+    start_background "$@"
+    ;;
+
+  run)
+    DESKFLOW_SILENT=0 exec "${INSTALL_DIR}/run-deskflow" "$@"
+    ;;
+
+  stop)
+    if killall deskflow-core 2>/dev/null; then
+      info "Stopped running deskflow-core process."
+    else
+      info "deskflow-core is not running."
+    fi
+    ;;
+
+  enable-autostart)
+    sh "${INSTALL_DIR}/manage-deskflow" enable-autostart
+    ;;
+
+  disable-autostart)
+    sh "${INSTALL_DIR}/manage-deskflow" disable-autostart
+    ;;
+
+  update)
+    channel=$(cat "${INSTALL_DIR}/.channel")
+    info "Checking channel '${channel}' for updates..."
+
+    WORK_DIR=$(mktemp -d)
+    trap 'rm -rf "${WORK_DIR}"' EXIT INT TERM
+
+    tmp_selector="${WORK_DIR}/selector.json"
+    fetch_channel_selector "${channel}" "${tmp_selector}"
+
+    available_version=$(json_get canonical_version "${tmp_selector}")
+    if [ -z "${available_version}" ]; then
+      if [ -z "${MISTER_DESKFLOW_PREVIEW_TOKEN}" ]; then
+        die "No public release on '${channel}' yet. Set MISTER_DESKFLOW_PREVIEW_TOKEN to access preview builds."
+      else
+        die "canonical_version not found in channel selector for '${channel}'"
+      fi
+    fi
+
+    installed_version=""
+    if [ -f "${INSTALL_DIR}/.installed-version" ]; then
+      installed_version=$(cat "${INSTALL_DIR}/.installed-version")
+    fi
+
+    if [ -n "${installed_version}" ] && [ "${installed_version}" = "${available_version}" ]; then
+      info "Already up to date (${installed_version})."
+    else
+      if [ -n "${installed_version}" ]; then
+        info "Update available: ${installed_version} to ${available_version}"
+      else
+        info "No version record found; reinstalling ${available_version}..."
+      fi
+      exec sh "${SCRIPT_DIR}/deskflow" install "${channel}"
+    fi
+    ;;
+
+  configure)
+    info "GUI configuration not yet available. A text editor can be opened using:"
+    info "${SCRIPT_DIR}/deskflow configure-from-cli"
+    ;;
+
+  configure-from-cli)
+    editor=$(find_text_editor) || die "No text editor found; install nano or vi, or set \$EDITOR"
+    exec "${editor}" "${INSTALL_DIR}/deskflow.conf"
+    ;;
+
+  fingerprint-trust)
+    mode="${1:-}"
+    [ -n "${mode}" ] || die "Usage: deskflow fingerprint-trust strict|tofu|promiscuous"
+    exec sh "${INSTALL_DIR}/manage-deskflow" set-fingerprint-trust "${mode}"
+    ;;
+
+  show-fingerprint-trust)
+    exec sh "${INSTALL_DIR}/manage-deskflow" show-fingerprint-trust
+    ;;
+
+  status)
+    [ -f "${INSTALL_DIR}/.channel" ] \
+      && channel=$(cat "${INSTALL_DIR}/.channel")
+    [ -f "${INSTALL_DIR}/.installed-version" ] \
+      && installed_version=$(cat "${INSTALL_DIR}/.installed-version")
+    [ -f "${INSTALL_DIR}/.runtime-fingerprint" ] \
+      && runtime_fp=$(cat "${INSTALL_DIR}/.runtime-fingerprint")
+    [ -f "${INSTALL_DIR}/.xkb-fingerprint" ] \
+      && xkb_fp=$(cat "${INSTALL_DIR}/.xkb-fingerprint")
+
+    if killall -0 deskflow-core 2>/dev/null; then
+      service_state="running"
+    else
+      service_state="stopped"
+    fi
+
+    info "Channel:  ${channel:-unknown}"
+    info "Version:  ${installed_version:-unknown}"
+    info "Service:  ${service_state}"
+    info "Runtime:  ${runtime_fp:-unknown}"
+    info "XKB:      ${xkb_fp:-unknown}"
+    ;;
+
+  help|--help|-h)
+    show_help
+    ;;
+
+  *)
+    if [ -f "${INSTALL_DIR}/.channel" ]; then
+      die "Unknown command '${command}'. Run 'deskflow help' for usage"
+    else
+      die "Unknown command '${command}'. Deskflow isn't installed; run 'deskflow install' first."
+    fi
+    ;;
+esac
