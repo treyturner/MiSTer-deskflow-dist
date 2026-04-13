@@ -7,7 +7,7 @@
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow}"
+INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow-dist}"
 MISTER_DESKFLOW_PREVIEW_TOKEN="${MISTER_DESKFLOW_PREVIEW_TOKEN:-}"
 RELEASE_DIST_REPO="${RELEASE_DIST_REPO:-treyturner/MiSTer-deskflow-dist}"
 PREVIEW_DIST_REPO="${PREVIEW_DIST_REPO:-treyturner/MiSTer-deskflow-dist-preview}"
