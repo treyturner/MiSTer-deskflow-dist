@@ -614,25 +614,54 @@ patreage__mode_is_private() {
 	(((8#${mode} & 077) == 0))
 }
 
+patreage__repair_private_permissions() {
+	local path="$1"
+	local desired_mode="$2"
+	local mode
+
+	chmod "${desired_mode}" "${path}" >/dev/null 2>&1 || return 1
+	mode="$(patreage__path_mode "${path}")" || return 1
+	patreage__mode_is_private "${mode}"
+}
+
+patreage__ensure_private_permissions() {
+	local path="$1"
+	local desired_mode="$2"
+	local mode
+
+	mode="$(patreage__path_mode "${path}")" || return 1
+	if patreage__mode_is_private "${mode}"; then
+		return 0
+	fi
+
+	patreage__repair_private_permissions "${path}" "${desired_mode}"
+}
+
+patreage__remove_new_empty_state_dir() {
+	local state_dir="$1"
+	local state_dir_existed="$2"
+
+	if [[ "${state_dir_existed}" == "0" ]]; then
+		rmdir "${state_dir}" >/dev/null 2>&1 || true
+	fi
+}
+
 patreage__validate_state_path_permissions() {
 	local state_dir
 	local state_file
-	local mode
 
 	state_dir="$(patreage__state_dir)"
 	state_file="$(patreage__state_file)"
 
 	if [[ -d "${state_dir}" ]]; then
-		mode="$(patreage__path_mode "${state_dir}")" || return 1
-		if ! patreage__mode_is_private "${mode}"; then
+		if ! patreage__ensure_private_permissions "${state_dir}" 700; then
 			patreage__warn "state directory permissions are too open: ${state_dir}"
 			return 1
 		fi
 	fi
 
 	if [[ -f "${state_file}" ]]; then
-		mode="$(patreage__path_mode "${state_file}")" || return 1
-		if ! patreage__mode_is_private "${mode}"; then
+		if ! patreage__ensure_private_permissions "${state_file}" 600; then
 			patreage__warn "state file permissions are too open: ${state_file}"
 			return 1
 		fi
@@ -643,16 +672,27 @@ patreage__validate_state_path_permissions() {
 
 patreage__ensure_state_dir() {
 	local state_dir
+	local state_dir_existed=0
 
 	state_dir="$(patreage__state_dir)"
-	mkdir -p "${state_dir}"
-	chmod 700 "${state_dir}"
+	if [[ -d "${state_dir}" ]]; then
+		state_dir_existed=1
+	fi
+
+	if ! mkdir -p "${state_dir}"; then
+		return 1
+	fi
+	if ! patreage__repair_private_permissions "${state_dir}" 700; then
+		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
+		return 1
+	fi
 }
 
 patreage__write_state_json() {
 	local payload="$1"
 	local old_umask
 	local state_dir
+	local state_dir_existed=0
 	local state_file
 	local temp_file
 
@@ -660,33 +700,52 @@ patreage__write_state_json() {
 		return 1
 	fi
 
-	patreage__ensure_state_dir
 	state_dir="$(patreage__state_dir)"
+	if [[ -d "${state_dir}" ]]; then
+		state_dir_existed=1
+	fi
+
+	if ! patreage__ensure_state_dir; then
+		return 1
+	fi
 	state_file="$(patreage__state_file)"
 	old_umask="$(umask)"
 	umask 077
 	temp_file="$(mktemp "${state_dir}/session.json.tmp.XXXXXX")" || {
 		umask "${old_umask}"
+		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	}
 
+	if ! patreage__repair_private_permissions "${temp_file}" 600; then
+		rm -f "${temp_file}"
+		umask "${old_umask}"
+		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
+		return 1
+	fi
 	if ! printf '%s\n' "${payload}" >"${temp_file}"; then
 		rm -f "${temp_file}"
 		umask "${old_umask}"
+		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	fi
-	if ! chmod 600 "${temp_file}"; then
+	if ! patreage__repair_private_permissions "${temp_file}" 600; then
 		rm -f "${temp_file}"
 		umask "${old_umask}"
+		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	fi
 	if ! mv -f "${temp_file}" "${state_file}"; then
 		rm -f "${temp_file}"
 		umask "${old_umask}"
+		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	fi
-	if ! chmod 600 "${state_file}"; then
+	if ! patreage__repair_private_permissions "${state_dir}" 700 ||
+		! patreage__repair_private_permissions "${state_file}" 600; then
+		rm -f "${state_file}"
 		umask "${old_umask}"
+		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	fi
 	umask "${old_umask}"
