@@ -2352,7 +2352,7 @@ patreage_state_file_path() {
 
 verify_preview_repo_access() {
   ensure_patreage_module
-  patreage_client repo-access check --repo "${PREVIEW_RELEASE_REPO}" >/dev/null \
+  patreage_client repo-access --repo "${PREVIEW_RELEASE_REPO}" >/dev/null \
     || die "You don't appear to have access."
 }
 
@@ -2652,7 +2652,7 @@ show_preview_status() {
   fi
 
   access_err="$(mktemp)"
-  if patreage_client repo-access check --repo "${PREVIEW_RELEASE_REPO}" >/dev/null 2>"${access_err}"; then
+  if patreage_client repo-access --repo "${PREVIEW_RELEASE_REPO}" >/dev/null 2>"${access_err}"; then
     info "Preview repo access granted"
   else
     error_line="$(sed -n '1p' "${access_err}" 2>/dev/null || true)"
