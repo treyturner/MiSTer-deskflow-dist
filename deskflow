@@ -621,7 +621,18 @@ patreage__repair_private_permissions() {
 
 	chmod "${desired_mode}" "${path}" >/dev/null 2>&1 || return 1
 	mode="$(patreage__path_mode "${path}")" || return 1
-	patreage__mode_is_private "${mode}"
+	if patreage__mode_is_private "${mode}"; then
+		return 0
+	fi
+
+	return 2
+}
+
+patreage__repair_or_accept_private_permissions() {
+	local repair_status=0
+
+	patreage__repair_private_permissions "$@" || repair_status=$?
+	[[ "${repair_status}" -eq 0 || "${repair_status}" -eq 2 ]]
 }
 
 patreage__ensure_private_permissions() {
@@ -634,7 +645,7 @@ patreage__ensure_private_permissions() {
 		return 0
 	fi
 
-	patreage__repair_private_permissions "${path}" "${desired_mode}"
+	patreage__repair_or_accept_private_permissions "${path}" "${desired_mode}"
 }
 
 patreage__remove_new_empty_state_dir() {
@@ -682,7 +693,7 @@ patreage__ensure_state_dir() {
 	if ! mkdir -p "${state_dir}"; then
 		return 1
 	fi
-	if ! patreage__repair_private_permissions "${state_dir}" 700; then
+	if ! patreage__repair_or_accept_private_permissions "${state_dir}" 700; then
 		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	fi
@@ -717,7 +728,7 @@ patreage__write_state_json() {
 		return 1
 	}
 
-	if ! patreage__repair_private_permissions "${temp_file}" 600; then
+	if ! patreage__repair_or_accept_private_permissions "${temp_file}" 600; then
 		rm -f "${temp_file}"
 		umask "${old_umask}"
 		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
@@ -729,7 +740,7 @@ patreage__write_state_json() {
 		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	fi
-	if ! patreage__repair_private_permissions "${temp_file}" 600; then
+	if ! patreage__repair_or_accept_private_permissions "${temp_file}" 600; then
 		rm -f "${temp_file}"
 		umask "${old_umask}"
 		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
@@ -741,8 +752,8 @@ patreage__write_state_json() {
 		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
 		return 1
 	fi
-	if ! patreage__repair_private_permissions "${state_dir}" 700 ||
-		! patreage__repair_private_permissions "${state_file}" 600; then
+	if ! patreage__repair_or_accept_private_permissions "${state_dir}" 700 ||
+		! patreage__repair_or_accept_private_permissions "${state_file}" 600; then
 		rm -f "${state_file}"
 		umask "${old_umask}"
 		patreage__remove_new_empty_state_dir "${state_dir}" "${state_dir_existed}"
