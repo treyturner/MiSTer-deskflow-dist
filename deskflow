@@ -804,8 +804,8 @@ patreage__state_timestamp_expired() {
 
 	printf '%s\n' "${state_json}" | jq -e --arg field_name "${field_name}" '
     def parse_time:
-      sub("\\.[0-9]+Z$"; "Z")
-      | sub("\\+00:00$"; "Z")
+      if endswith("+00:00") then .[0:(length - 6)] + "Z" else . end
+      | if endswith("Z") and (index(".") != null) then .[0:index(".")] + "Z" else . end
       | fromdateiso8601;
     now >= (.[$field_name] | parse_time)
   ' >/dev/null 2>&1
@@ -1777,8 +1777,8 @@ patreage__cmd_status() {
 		--argjson remote_summary "${remote_summary_json}" \
 		'
     def parse_time:
-      sub("\\.[0-9]+Z$"; "Z")
-      | sub("\\+00:00$"; "Z")
+      if endswith("+00:00") then .[0:(length - 6)] + "Z" else . end
+      | if endswith("Z") and (index(".") != null) then .[0:index(".")] + "Z" else . end
       | fromdateiso8601;
     . as $state
     | ($state.refresh_token_expires_at | parse_time) as $refresh_expiry
