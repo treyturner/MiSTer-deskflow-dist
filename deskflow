@@ -20,9 +20,9 @@ die() { error "$*"; exit 1; }
 configure_ssl_cert_env() {
   local ca_bundle=""
 
-  if [ -n "${CURL_CA_BUNDLE:-}" ] && [ -r "${CURL_CA_BUNDLE}" ]; then
+  if [[ -n "${CURL_CA_BUNDLE:-}" ]] && [[ -r "${CURL_CA_BUNDLE}" ]]; then
     ca_bundle="${CURL_CA_BUNDLE}"
-  elif [ -n "${SSL_CERT_FILE:-}" ] && [ -r "${SSL_CERT_FILE}" ]; then
+  elif [[ -n "${SSL_CERT_FILE:-}" ]] && [[ -r "${SSL_CERT_FILE}" ]]; then
     ca_bundle="${SSL_CERT_FILE}"
   else
     for ca_bundle in \
@@ -32,14 +32,14 @@ configure_ssl_cert_env() {
       /etc/ssl/certs/ca-bundle.crt \
       /etc/pki/tls/certs/ca-bundle.crt
     do
-      if [ -r "${ca_bundle}" ]; then
+      if [[ -r "${ca_bundle}" ]]; then
         break
       fi
       ca_bundle=""
     done
   fi
 
-  if [ -n "${ca_bundle}" ]; then
+  if [[ -n "${ca_bundle}" ]]; then
     export SSL_CERT_FILE="${ca_bundle}"
     export CURL_CA_BUNDLE="${ca_bundle}"
   fi
@@ -2552,7 +2552,7 @@ fetch_channel_selector() {
 show_help() {
   printf 'MiSTer Deskflow - keyboard and mouse sharing for MiSTer FPGA\n'
   printf '\n'
-  if [ -f "${INSTALL_DIR}/.channel" ]; then
+  if [[ -f "${INSTALL_DIR}/.channel" ]]; then
     printf 'Usage: deskflow <command> [args]\n'
     printf '\n'
     printf 'Commands:\n'
@@ -2599,15 +2599,15 @@ sha256_file() {
 }
 
 find_text_editor() {
-  if [ -n "${VISUAL:-}" ] && command -v "${VISUAL}" >/dev/null 2>&1; then
+  if [[ -n "${VISUAL:-}" ]] && command -v "${VISUAL}" >/dev/null 2>&1; then
     printf '%s\n' "${VISUAL}"
     return 0
   fi
-  if [ -n "${EDITOR:-}" ] && command -v "${EDITOR}" >/dev/null 2>&1; then
+  if [[ -n "${EDITOR:-}" ]] && command -v "${EDITOR}" >/dev/null 2>&1; then
     printf '%s\n' "${EDITOR}"
     return 0
   fi
-  if [ -e "${HOME}/.viminfo" ] && command -v vi >/dev/null 2>&1; then
+  if [[ -e "${HOME}/.viminfo" ]] && command -v vi >/dev/null 2>&1; then
     printf 'vi\n'
     return 0
   fi
@@ -2737,7 +2737,7 @@ start_background() {
 }
 
 command="${1:-}"
-if [ -z "${command}" ]; then
+if [[ -z "${command}" ]]; then
   show_help
   exit 0
 fi
@@ -2746,8 +2746,8 @@ shift
 case "${command}" in
   install|preview-login|preview-logout|preview-status|help|--help|-h) ;;
   *)
-    if [ ! -f "${INSTALL_DIR}/.channel" ]; then
-      if [ "${command}" = "remove" ]; then
+    if [[ ! -f "${INSTALL_DIR}/.channel" ]]; then
+      if [[ "${command}" == "remove" ]]; then
         info "Deskflow isn't installed. To remove this entrypoint, run:"
         info "  rm ${0}"
         exit 0
@@ -2761,7 +2761,7 @@ esac
 case "${command}" in
   install)
     saved_channel=""
-    if [ -f "${INSTALL_DIR}/.channel" ]; then
+    if [[ -f "${INSTALL_DIR}/.channel" ]]; then
       saved_channel=$(cat "${INSTALL_DIR}/.channel")
     fi
     channel="${1:-${saved_channel:-latest}}"
@@ -2783,9 +2783,15 @@ case "${command}" in
     manifest_url=$(json_get manifest_url "${tmp_selector}")
     canonical_version=$(json_get canonical_version "${tmp_selector}")
 
-    if [ -z "${manifest_url}" ]; then
-      die "manifest_url not found in channel selector for '${channel}'"
+    if [[ -z "${manifest_url}" ]]; then
+      if is_preview_channel "${channel}"; then
+        die "No manifest_url found in '${channel}'. Has a release been published?"
+      else
+        error "Channel '${channel}' has no releases. MiSTer-deskflow requires a subscription to https://patreon.treyturner.info while in preview."
+        die "If you have a subscription, run 'deskflow install preview' to trigger Patreon OAuth authentication and access preview builds."
+      fi
     fi
+
     info "Resolved channel '${channel}' to ${canonical_version}"
 
     # ---------------------------------------------------------------------------
@@ -2809,8 +2815,8 @@ case "${command}" in
     app_archive=$(json_section_get app archive "${tmp_manifest}")
     app_sha256=$(json_section_get app sha256 "${tmp_manifest}")
 
-    [ -n "${canonical_version}" ] || die "canonical_version not found in manifest"
-    [ -n "${app_archive}" ]       || die "App archive name not found in manifest"
+    [[ -n "${canonical_version}" ]] || die "canonical_version not found in manifest"
+    [[ -n "${app_archive}" ]]       || die "App archive name not found in manifest"
 
     # Derive the release download base URL from the manifest URL
     release_base=$(printf '%s' "${manifest_url}" | sed 's|/[^/]*$||')
@@ -2827,9 +2833,9 @@ case "${command}" in
       download "${release_base}/${app_archive}" "${tmp_app}"
     fi
 
-    if [ -n "${app_sha256}" ]; then
+    if [[ -n "${app_sha256}" ]]; then
       actual=$(sha256_file "${tmp_app}")
-      [ "${actual}" = "${app_sha256}" ] \
+      [[ "${actual}" == "${app_sha256}" ]] \
         || die "App archive SHA256 mismatch: expected ${app_sha256}, got ${actual}"
     fi
 
@@ -2861,12 +2867,12 @@ case "${command}" in
       info "Stopped running deskflow-core process."
     fi
     for hook in /etc/network/if-up.d/deskflow /etc/network/if-down.d/deskflow; do
-      if [ -f "${hook}" ]; then
+      if [[ -f "${hook}" ]]; then
         rm -f "${hook}"
         info "Removed ${hook}"
       fi
     done
-    if [ -d "${INSTALL_DIR}" ]; then
+    if [[ -d "${INSTALL_DIR}" ]]; then
       rm -rf "${INSTALL_DIR}"
       info "Removed ${INSTALL_DIR}"
     fi
@@ -2914,19 +2920,19 @@ case "${command}" in
     fetch_channel_selector "${channel}" "${tmp_selector}"
 
     available_version=$(json_get canonical_version "${tmp_selector}")
-    if [ -z "${available_version}" ]; then
+    if [[ -z "${available_version}" ]]; then
       die "canonical_version not found in channel selector for '${channel}'"
     fi
 
     installed_version=""
-    if [ -f "${INSTALL_DIR}/.installed-version" ]; then
+    if [[ -f "${INSTALL_DIR}/.installed-version" ]]; then
       installed_version=$(cat "${INSTALL_DIR}/.installed-version")
     fi
 
-    if [ -n "${installed_version}" ] && [ "${installed_version}" = "${available_version}" ]; then
+    if [[ -n "${installed_version}" ]] && [[ "${installed_version}" == "${available_version}" ]]; then
       info "Already up to date (${installed_version})."
     else
-      if [ -n "${installed_version}" ]; then
+      if [[ -n "${installed_version}" ]]; then
         info "Update available: ${installed_version} to ${available_version}"
       else
         info "No version record found; reinstalling ${available_version}..."
@@ -2964,7 +2970,7 @@ case "${command}" in
 
   fingerprint-trust)
     mode="${1:-}"
-    [ -n "${mode}" ] || die "Usage: deskflow fingerprint-trust strict|tofu|promiscuous"
+    [[ -n "${mode}" ]] || die "Usage: deskflow fingerprint-trust strict|tofu|promiscuous"
     exec "${INSTALL_DIR}/manage-deskflow" set-fingerprint-trust "${mode}"
     ;;
 
@@ -2973,13 +2979,13 @@ case "${command}" in
     ;;
 
   status)
-    [ -f "${INSTALL_DIR}/.channel" ] \
+    [[ -f "${INSTALL_DIR}/.channel" ]] \
       && channel=$(cat "${INSTALL_DIR}/.channel")
-    [ -f "${INSTALL_DIR}/.installed-version" ] \
+    [[ -f "${INSTALL_DIR}/.installed-version" ]] \
       && installed_version=$(cat "${INSTALL_DIR}/.installed-version")
-    [ -f "${INSTALL_DIR}/.runtime-fingerprint" ] \
+    [[ -f "${INSTALL_DIR}/.runtime-fingerprint" ]] \
       && runtime_fp=$(cat "${INSTALL_DIR}/.runtime-fingerprint")
-    [ -f "${INSTALL_DIR}/.xkb-fingerprint" ] \
+    [[ -f "${INSTALL_DIR}/.xkb-fingerprint" ]] \
       && xkb_fp=$(cat "${INSTALL_DIR}/.xkb-fingerprint")
 
     if killall -0 deskflow-core 2>/dev/null; then
@@ -3000,7 +3006,7 @@ case "${command}" in
     ;;
 
   *)
-    if [ -f "${INSTALL_DIR}/.channel" ]; then
+    if [[ -f "${INSTALL_DIR}/.channel" ]]; then
       die "Unknown command '${command}'. Run 'deskflow help' for usage"
     else
       die "Unknown command '${command}'. Deskflow isn't installed; run 'deskflow install' first."
