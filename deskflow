@@ -2731,9 +2731,31 @@ show_preview_status() {
   rm -f "${access_err}"
 }
 
+running_core_pid() {
+  local pid pids
+
+  if pids=$(pidof deskflow-core 2>/dev/null); then
+    for pid in ${pids}; do
+      printf '%s\n' "${pid}"
+      return 0
+    done
+  fi
+
+  return 1
+}
+
 start_background() {
+  local existing_pid
+  local started_pid
+
+  if existing_pid=$(running_core_pid); then
+    info "deskflow-core is already running (PID ${existing_pid})."
+    return 0
+  fi
+
   "${INSTALL_DIR}/run-deskflow" "$@" </dev/null >/dev/null 2>&1 &
-  info "Started deskflow-core in the background (PID $!)."
+  started_pid=$!
+  info "Started deskflow-core in the background (PID ${started_pid})."
 }
 
 command="${1:-}"

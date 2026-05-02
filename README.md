@@ -146,7 +146,7 @@ For more detailed server-side setup documentation, see:
 
     By default, `deskflow install` follows the `latest` public channel. Public release channels are also available by upstream version, such as `deskflow install v1.26.0`.
 
-    Preview builds require a subscription to [patreon.treyturner.info](https://patreon.treyturner.info) at the "Sphere of Influence" tier or higher, as verified through OAuth login to Patreon. If a valid login session doesn't exist, `deskflow install preview` starts sign-in automatically:
+    Preview builds require a subscription to [patreon.treyturner.info](https://patreon.treyturner.info) as verified through OAuth authentication. Sign-in will be triggered automatically if a login session doesn't exist when installing the preview channel:
 
     ```sh
     deskflow install preview
