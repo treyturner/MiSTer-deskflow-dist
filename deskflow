@@ -2892,11 +2892,11 @@ case "${command}" in
     ;;
 
   enable-autostart)
-    sh "${INSTALL_DIR}/manage-deskflow" enable-autostart
+    "${INSTALL_DIR}/manage-deskflow" enable-autostart
     ;;
 
   disable-autostart)
-    sh "${INSTALL_DIR}/manage-deskflow" disable-autostart
+    "${INSTALL_DIR}/manage-deskflow" disable-autostart
     ;;
 
   update)
@@ -2965,11 +2965,11 @@ case "${command}" in
   fingerprint-trust)
     mode="${1:-}"
     [ -n "${mode}" ] || die "Usage: deskflow fingerprint-trust strict|tofu|promiscuous"
-    exec sh "${INSTALL_DIR}/manage-deskflow" set-fingerprint-trust "${mode}"
+    exec "${INSTALL_DIR}/manage-deskflow" set-fingerprint-trust "${mode}"
     ;;
 
   show-fingerprint-trust)
-    exec sh "${INSTALL_DIR}/manage-deskflow" show-fingerprint-trust
+    exec "${INSTALL_DIR}/manage-deskflow" show-fingerprint-trust
     ;;
 
   status)
