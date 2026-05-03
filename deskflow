@@ -2559,12 +2559,14 @@ show_help() {
     printf '  install [CHANNEL]    Install or reinstall (default channel: latest)\n'
     printf '  update               Check and apply any available updates\n'
     printf '  start                Start deskflow-core in the background\n'
-    printf '  run                  Run deskflow-core in the foreground\n'
+    printf '  run                  Run deskflow-core in foreground with console logs\n'
     printf '  stop                 Stop deskflow-core\n'
     printf '  configure            Open GUI configuration\n'
     printf '  configure-from-cli   Edit deskflow.conf in a text editor\n'
-    printf '  fingerprint-trust    Persist strict, tofu, or promiscuous for future launches\n'
-    printf '  show-fingerprint-trust  Show current fingerprint-trust mode\n'
+    printf '  trust                Trust a server fingerprint\n'
+    printf '  untrust              Remove a trusted server fingerprint\n'
+    printf '  set-trust-mode       Persist strict, tofu, or promiscuous for future launches\n'
+    printf '  show-trust           Show current trust mode and trusted fingerprints\n'
     printf '  enable-autostart     Enable automatic startup on network up\n'
     printf '  disable-autostart    Disable automatic startup on network up\n'
     printf '  remove               Stop and uninstall Deskflow\n'
@@ -2744,18 +2746,51 @@ running_core_pid() {
   return 1
 }
 
+terminate() {
+  local pid
+  local remaining=10
+
+  if ! pid=$(running_core_pid); then
+    return 1
+  fi
+
+  info "Stopping Deskflow (PID ${pid})..."
+  killall deskflow-core 2>/dev/null || true
+
+  while killall -0 deskflow-core 2>/dev/null; do
+    if ((remaining <= 0)); then
+      info "Deskflow didn't stop after 10 seconds; forcing shutdown."
+      killall -KILL deskflow-core 2>/dev/null || true
+      sleep 1
+
+      if killall -0 deskflow-core 2>/dev/null; then
+        die "Deskflow is still running after SIGKILL. Time to reboot? :/"
+      fi
+
+      info "Deskflow killed."
+      return 0
+    fi
+
+    sleep 1
+    ((remaining--))
+  done
+
+  info "Deskflow stopped."
+  return 0
+}
+
 start_background() {
   local existing_pid
   local started_pid
 
   if existing_pid=$(running_core_pid); then
-    info "deskflow-core is already running (PID ${existing_pid})."
+    info "Deskflow is already running in PID ${existing_pid}."
     return 0
   fi
 
   "${INSTALL_DIR}/run-deskflow" "$@" </dev/null >/dev/null 2>&1 &
   started_pid=$!
-  info "Started deskflow-core in the background (PID ${started_pid})."
+  info "Started Deskflow in the background (PID ${started_pid})."
 }
 
 command="${1:-}"
@@ -2866,9 +2901,7 @@ case "${command}" in
     # ---------------------------------------------------------------------------
 
     # Stop any running deskflow-core before replacing binaries
-    if killall deskflow-core 2>/dev/null; then
-      info "Stopped running Deskflow process."
-    fi
+    terminate || true
 
     mkdir -p "${INSTALL_DIR}"
     info "Extracting app archive to ${INSTALL_DIR}"
@@ -2885,9 +2918,7 @@ case "${command}" in
     ;;
 
   remove)
-    if killall deskflow-core 2>/dev/null; then
-      info "Stopped running deskflow-core process."
-    fi
+    terminate || true
     for hook in /etc/network/if-up.d/deskflow /etc/network/if-down.d/deskflow; do
       if [[ -f "${hook}" ]]; then
         rm -f "${hook}"
@@ -2912,10 +2943,8 @@ case "${command}" in
     ;;
 
   stop)
-    if killall deskflow-core 2>/dev/null; then
-      info "Stopped running deskflow-core process."
-    else
-      info "deskflow-core is not running."
+    if ! terminate; then
+      info "Deskflow is not running."
     fi
     ;;
 
@@ -2990,14 +3019,26 @@ case "${command}" in
     exec "${editor}" "${INSTALL_DIR}/deskflow.conf"
     ;;
 
-  fingerprint-trust)
-    mode="${1:-}"
-    [[ -n "${mode}" ]] || die "Usage: deskflow fingerprint-trust strict|tofu|promiscuous"
-    exec "${INSTALL_DIR}/manage-deskflow" set-fingerprint-trust "${mode}"
+  trust)
+    fingerprint="${1:-}"
+    [[ -n "${fingerprint}" ]] || die "Usage: deskflow trust FINGERPRINT"
+    exec "${INSTALL_DIR}/manage-deskflow" trust "${fingerprint}"
     ;;
 
-  show-fingerprint-trust)
-    exec "${INSTALL_DIR}/manage-deskflow" show-fingerprint-trust
+  untrust)
+    fingerprint="${1:-}"
+    [[ -n "${fingerprint}" ]] || die "Usage: deskflow untrust FINGERPRINT"
+    exec "${INSTALL_DIR}/manage-deskflow" untrust "${fingerprint}"
+    ;;
+
+  set-trust-mode)
+    mode="${1:-}"
+    [[ -n "${mode}" ]] || die "Usage: deskflow set-trust-mode strict|tofu|promiscuous"
+    exec "${INSTALL_DIR}/manage-deskflow" set-trust-mode "${mode}"
+    ;;
+
+  show-trust)
+    exec "${INSTALL_DIR}/manage-deskflow" show-trust
     ;;
 
   status)

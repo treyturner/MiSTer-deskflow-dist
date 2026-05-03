@@ -178,8 +178,10 @@ Before Deskflow is installed, `install`, the preview auth commands, and `help` a
 | `stop`                     | Stop any running Deskflow client process.                                        |
 | `configure`                | GUI configuration. (not yet implemented)                                         |
 | `configure-from-cli`       | Open the config file in a text editor such as `nano` or `vi`.                    |
-| `fingerprint-trust <MODE>` | Persist `strict`, `tofu`, or `promiscuous` for future starts and autostarts.             |
-| `show-fingerprint-trust`   | Show the current fingerprint trust mode.                                         |
+| `trust <FINGERPRINT>`      | Trust a Deskflow server fingerprint.                                             |
+| `untrust <FINGERPRINT>`    | Remove a trusted Deskflow server fingerprint.                                    |
+| `set-trust-mode <MODE>`    | Persist `strict`, `tofu`, or `promiscuous` for future starts and autostarts.     |
+| `show-trust`               | Show the current trust mode and trusted fingerprints.                            |
 | `enable-autostart`         | Install network hooks so Deskflow starts automatically when networking comes up. |
 | `disable-autostart`        | Remove the autostart network hooks.                                              |
 | `remove`                   | Stop Deskflow, remove autostart hooks, and delete the installed files.           |
@@ -224,7 +226,7 @@ These are the settings most users will want to review:
 
 ## TLS and verification
 
-By default, Deskflow expects TLS to be enabled on the server. Both `deskflow start` and `deskflow run` launch the client with the saved fingerprint-trust mode, defaulting to `tofu` ([trust on first use](https://en.wikipedia.org/wiki/Trust_on_first_use)). The first successful TLS connection will be automatically trusted and its fingerprint saved automatically.
+By default, Deskflow expects TLS to be enabled on the server. Both `deskflow start` and `deskflow run` launch the client with the saved trust mode, defaulting to `tofu` ([trust on first use](https://en.wikipedia.org/wiki/Trust_on_first_use)). The first successful TLS connection will be automatically trusted and its fingerprint saved automatically.
 
 If your Deskflow server has TLS disabled entirely, add this to `/media/fat/Scripts/deskflow-dist/deskflow.conf`:
 
@@ -242,34 +244,41 @@ deskflow start
 If your server still uses TLS but you want encrypted connections without fingerprint verification, set the persisted launch mode to `promiscuous`:
 
 ```sh
-deskflow fingerprint-trust promiscuous
+deskflow set-trust-mode promiscuous
 deskflow start
 ```
 
-Use `--fingerprint-trust promiscuous` only if you understand the security tradeoff. It keeps encryption enabled, but it does not verify that you are talking to the expected server.
+Use `promiscuous` only if you understand the security tradeoff. It keeps encryption enabled, but it does not verify that you are talking to the expected server.
 
 To go back to the default trust-on-first-use behavior:
 
 ```sh
-deskflow fingerprint-trust tofu
+deskflow set-trust-mode tofu
 ```
 
 If you want strict verification and only want to allow already-trusted server fingerprints:
 
 ```sh
-deskflow fingerprint-trust strict
+deskflow trust <sha256-fingerprint>
+deskflow set-trust-mode strict
 ```
 
-You can check the current setting at any time with:
+To remove a previously trusted server fingerprint:
 
 ```sh
-deskflow show-fingerprint-trust
+deskflow untrust <sha256-fingerprint>
+```
+
+You can check the current setting and trusted fingerprints at any time with:
+
+```sh
+deskflow show-trust
 ```
 
 The selected mode is stored in:
 
 ```text
-/media/fat/Scripts/deskflow-dist/.fingerprint-trust
+/media/fat/Scripts/deskflow-dist/.trust-mode
 ```
 
 `deskflow start`, `deskflow run`, and autostart all respect the saved mode.
