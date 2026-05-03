@@ -25,7 +25,7 @@ ENTRYPOINT_PATH="$(resolve_entrypoint_path || printf '%s\n' "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${ENTRYPOINT_PATH}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow-dist}"
 PREVIEW_RELEASE_REPO="treyturner/MiSTer-deskflow-dist-preview"
-DESKFLOW_ENTRYPOINT_SHA256="710a1dfc0f24fac9db60600578be363a4b84cd09e10813a485f568564a5e8dba"
+DESKFLOW_ENTRYPOINT_SHA256="71b9e329aed76c948b913e8deb0e6a66994fe06268ef14c9b035f735b99c3761"
 DESKFLOW_UPDATE_INTERVAL_SECONDS=86400
 
 info() { printf '%s\n' "$*"; }
@@ -3415,7 +3415,7 @@ show_help() {
     printf '  status               Show channel, version, service state, and bundle info\n'
     printf '  preview-login        Sign in with Patreage and verify preview access\n'
     printf '  preview-logout       Revoke and clear the Patreage session\n'
-    printf '  preview-status       Show preview brokerage status and diagnostics\n'
+    printf '  preview-doctor       Show preview brokerage status and diagnostics\n'
     printf '  help                 Show this help\n'
   else
     printf 'Deskflow is not installed.\n'
@@ -3426,7 +3426,7 @@ show_help() {
     printf '  install [CHANNEL]    Download and install (default channel: latest)\n'
     printf '  preview-login        Sign in with Patreage and verify preview access\n'
     printf '  preview-logout       Revoke and clear the Patreage session\n'
-    printf '  preview-status       Show preview brokerage status and diagnostics\n'
+    printf '  preview-doctor       Show preview brokerage status and diagnostics\n'
     printf '  help                 Show this help\n'
   fi
 }
@@ -3497,10 +3497,10 @@ release_repo_from_manifest_url() {
     | head -1
 }
 
-show_preview_status() {
+show_preview_doctor() {
   ensure_patreage_module
 
-  patreage_client doctor "${PREVIEW_RELEASE_REPO}"
+  patreage_client doctor "${PREVIEW_RELEASE_REPO}" | jq
 }
 
 running_core_pid() {
@@ -3571,7 +3571,7 @@ fi
 shift
 
 case "${command}" in
-  install|preview-login|preview-logout|preview-status|help|--help|-h) ;;
+  install|preview-login|preview-logout|preview-doctor|help|--help|-h) ;;
   *)
     if [[ ! -f "${INSTALL_DIR}/.channel" ]]; then
       if [[ "${command}" == "remove" ]]; then
@@ -3775,8 +3775,8 @@ case "${command}" in
     patreage_client logout
     ;;
 
-  preview-status)
-    show_preview_status
+  preview-doctor)
+    show_preview_doctor
     ;;
 
   configure)

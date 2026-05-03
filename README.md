@@ -188,7 +188,7 @@ Before Deskflow is installed, `install`, the preview auth commands, and `help` a
 | `status`                | Show channel, version, service state, and bundle info.                           |
 | `preview-login`         | Sign in with Patreon and verify preview access with the brokerage.               |
 | `preview-logout`        | Revoke and clear the preview brokerage session.                                  |
-| `preview-status`        | Show preview brokerage status and diagnostics                                    |
+| `preview-doctor`        | Show preview brokerage status and diagnostics                                    |
 | `help`                  | Show command help.                                                               |
 
 ## Configuration
