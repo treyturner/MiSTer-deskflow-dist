@@ -43,17 +43,9 @@ For these reasons and for efficiency in distributing updates, releases are deliv
 
 <img width="272" height="382" alt="Step 5: Rename to 'mister' and click 'Save'" src="https://github.com/user-attachments/assets/dec0f338-484f-4a7d-8103-d15121f92e5c" />
 
-6. Now click the `Advanced` tab.
+6. Note the IP of your server as it's needed for MiSTer-side setup, then click `Start`.
 
-<img width="447" height="322" alt="Step 6: Click 'Advanced'" src="https://github.com/user-attachments/assets/d1475df5-76b4-4db7-9ea2-b7bf998e0b11" />
-
-7. Check `Use relative mouse movements` then click `OK`.
-
-<img width="446" height="317" alt="Step 7: Check 'use relative mouse movements'" src="https://github.com/user-attachments/assets/cb2d6b5c-b1de-4a87-ad8a-21b239479bb0" />
-
-8. Note the IP of your server as it's needed for MiSTer-side setup, then click `Start`.
-
-<img width="429" height="174" alt="Step 8: Note IP and click 'Start'" src="https://github.com/user-attachments/assets/afeb8606-42b9-492a-b2a3-787fce2fd3fe" />
+<img width="429" height="174" alt="Step 6: Note IP and click 'Start'" src="https://github.com/user-attachments/assets/afeb8606-42b9-492a-b2a3-787fce2fd3fe" />
 
 For more detailed server-side setup documentation, see:
 
