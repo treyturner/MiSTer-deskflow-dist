@@ -25,7 +25,7 @@ ENTRYPOINT_PATH="$(resolve_entrypoint_path || printf '%s\n' "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${ENTRYPOINT_PATH}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow-dist}"
 PREVIEW_RELEASE_REPO="treyturner/MiSTer-deskflow-dist-preview"
-DESKFLOW_ENTRYPOINT_SHA256="b2d474b7f0c040ebc274c7a380a0679262175cf7074814b441ea42d0f5991abf"
+DESKFLOW_ENTRYPOINT_SHA256="0128e0c2b8a25951efcff31e859064c218f01bdab01024f85e6beeb27c52cdf7"
 DESKFLOW_UPDATE_INTERVAL_SECONDS=86400
 
 info() { printf '%s\n' "$*"; }
@@ -3743,6 +3743,11 @@ case "${command}" in
 
   update)
     channel=$(cat "${INSTALL_DIR}/.channel")
+    was_running=0
+    if running_core_pid >/dev/null; then
+      was_running=1
+    fi
+
     info "Checking channel '${channel}' for updates..."
 
     WORK_DIR=$(mktemp -d)
@@ -3773,7 +3778,11 @@ case "${command}" in
       else
         info "No version record found; reinstalling ${available_version}..."
       fi
-      exec "${ENTRYPOINT_PATH}" install "${channel}"
+      "${ENTRYPOINT_PATH}" install "${channel}"
+      if ((was_running)); then
+        info "Restarting service..."
+        start_background
+      fi
     fi
     ;;
 
