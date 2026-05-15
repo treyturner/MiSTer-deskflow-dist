@@ -13,7 +13,7 @@ Upstream Deskflow is built for desktop operating systems. MiSTer is a much leane
 - As MiSTer doesn't provide an X11 or Wayland desktop session, this port implements a new backend.
 - Input has to be injected as synthetic keyboard and mouse devices so the active MiSTer core can see it.
 - The stock MiSTer Linux image is older than the runtime expected by a modern Deskflow build, so this package ships the needed runtime libraries, OpenSSL modules, and XKB data alongside `deskflow-core`.
-- Mouse movement uses MiSTer framebuffer geometry reported by the kernel, with config-file fallback values for startup and unreadable kernel logs.
+- Mouse movement uses a core-specific MiSTer geometry table, with kernel framebuffer messages and config-file values as fallbacks.
 - Configuration is script-driven as the GUI can't be built without a real windowing system.
 - Deskflow targets 64-bit architecture. Some bugs around this required fixing, there may be more, and I'm not interested in lobbying that this use-case is worth the project reopening 32-bit support.
 
@@ -197,8 +197,8 @@ The installer creates it from the shipped example on first install; later instal
 ```ini
 [client]
 remoteHost=192.168.1.100  # CRITICAL: must match the ip or hostname of your server
-screenWidthFallback=1920  # used until MiSTer framebuffer geometry is detected
-screenHeightFallback=1080 # used until MiSTer framebuffer geometry is detected
+screenWidthFallback=1920  # used until MiSTer core/framebuffer geometry is detected
+screenHeightFallback=1080 # used until MiSTer core/framebuffer geometry is detected
 languageSync=false        # only true if debugging keyboard layout issues
 
 [core]
@@ -212,7 +212,7 @@ tlsEnabled=true           # set false if your server has TLS disabled
 These are the settings most users will want to review:
 
 - `remoteHost`: **You almost certainly need to change this** to the IP address or hostname of your Deskflow server.
-- `screenWidthFallback` and `screenHeightFallback`: Startup fallback size used until Deskflow observes a MiSTer framebuffer mode. Runtime mode changes are detected from `/dev/kmsg` `MiSTer_fb` kernel messages and sent to the server automatically.
+- `screenWidthFallback` and `screenHeightFallback`: Startup fallback size used until Deskflow identifies the loaded MiSTer core or observes a framebuffer mode. Runtime core changes are detected from `/tmp/CORENAME`; if the loaded core is not in Deskflow's geometry table, Deskflow falls back to `/dev/kmsg` `MiSTer_fb` kernel messages. Geometry changes are sent to the server automatically.
 - `computerName`: The MiSTer screen name. This must match a screen name configured in your Deskflow server layout.
 - `port`: Leave this at `24800` unless your Deskflow server uses a different port.
 
