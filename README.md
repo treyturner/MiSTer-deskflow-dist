@@ -19,14 +19,12 @@ Upstream Deskflow is built for desktop operating systems. MiSTer is a much leane
 
 For these reasons and for efficiency in distributing updates, releases are delivered as a bootstrap script and runtime bundle instead of a single standalone binary.
 
-## Before you start
+## Pre-requisite: Deskflow server
 
-### **Pre-requisite**: Set up a Deskflow server on the computer hosting your keyboard and mouse
-
-<details>
-    <summary>Click to expand...</summary>
+The MiSTer client connects to a server that runs on the computer with your keyboard and mouse. To setup that server:
 
 1. Download, install, and open [Deskflow](https://github.com/deskflow/deskflow/releases/latest).
+
 2. Click `Use this computer's keyboard...`, then `Configure Server`.
 
 <img width="429" height="174" alt="Step 2: Main window" src="https://github.com/user-attachments/assets/7e5c08db-50f4-415d-b644-5732245bb145" />
@@ -43,7 +41,7 @@ For these reasons and for efficiency in distributing updates, releases are deliv
 
 <img width="272" height="382" alt="Step 5: Rename to 'mister' and click 'Save'" src="https://github.com/user-attachments/assets/dec0f338-484f-4a7d-8103-d15121f92e5c" />
 
-6. Now click the `Advanced` tab.
+6. Now click the `Advanced` tab.<a id="use-relative-mouse-movements"></a>
 
 <img width="447" height="322" alt="Step 6: Click 'Advanced'" src="https://github.com/user-attachments/assets/d1475df5-76b4-4db7-9ea2-b7bf998e0b11" />
 
@@ -59,8 +57,6 @@ For more detailed server-side setup documentation, see:
 
 - <https://deskflow.org>
 - <https://github.com/deskflow/deskflow/wiki>
-
-</details>
 
 ## MiSTer client installation
 
@@ -208,6 +204,9 @@ remoteHost=192.168.1.100        # CRITICAL: must match the ip or hostname of you
 screenWidthFallback=640         # used until MiSTer core geometry is detected
 screenHeightFallback=480        # used until MiSTer core geometry is detected
 absoluteMovementSlackFactor=1.5 # absolute-mode slack factor around the real framebuffer
+clipboardPasteHotkey=Super+v    # paste server clipboard text into the active core
+clipboardPasteDelayMs=0         # delay between pasted text keypresses
+clipboardPasteMaxChars=4096     # refuse larger text pastes; 0 disables this limit
 languageSync=false              # only true if debugging keyboard layout issues
 
 [core]
@@ -223,6 +222,9 @@ These are the settings most users will want to review:
 - `remoteHost`: **You almost certainly need to change this** to the IP address or hostname of your Deskflow server.
 - `screenWidthFallback` and `screenHeightFallback`: Startup fallback size used until Deskflow identifies the loaded MiSTer core from `/tmp/CORENAME`. If the loaded core is not in Deskflow's geometry table, the current geometry remains in use. Geometry changes are sent to the server automatically.
 - `absoluteMovementSlackFactor`: Absolute mouse mode reports a larger virtual screen to the server by this factor, which creates a forgiving edge margin around the real MiSTer framebuffer. Relative mouse mode always reports the exact framebuffer size. Valid range is `1.0` to `5.0`.
+- `clipboardPasteHotkey`: Hotkey used to type server clipboard text into the active core. Defaults to `Super+v`; supports any combination of `Control`, `Alt`, `Shift`, `Super`, and `Meta` plus one key. Set it empty to disable MiSTer paste.
+- `clipboardPasteDelayMs`: Milliseconds to wait between pasted text keypresses. Defaults to `0`, which emits as quickly as the uinput backend can send complete keypresses.
+- `clipboardPasteMaxChars`: Maximum text length accepted for a MiSTer paste. Larger server clipboard text is refused instead of typed. Set to `0` for unlimited paste length.
 - `computerName`: The MiSTer screen name. This must match a screen name configured in your Deskflow server layout.
 - `port`: Leave this at `24800` unless your Deskflow server uses a different port.
 
@@ -287,10 +289,10 @@ The selected mode is stored in:
 
 ## Usability tips
 
-- You can lock the mouse (and keyboard) to the active screen using **Scroll Lock**.
+- You can lock the mouse (and keyboard) to the active screen using **Scroll Lock** (default), or remap as needed.
 - In the server-side config, you can configure:
-  - Delays or requiring double-taps before switching
-  - Dead corners of different sizes to assist navigation to hidden taskbars
+  - Delays before switching
+  - Dead corners of different sizes to help accessing hidden taskbars
   - Translation of modifier keys like Ctrl/Alt/Shift between screens
   - Other custom hotkeys
 
@@ -306,23 +308,24 @@ An inherent limitation of substituting an actual window manager with a virtual s
 4. Close the MiSTer OSD
 5. Try to move in the same direction. Doh! 🤦‍♂️ Invisible wall.
 
-This is caused by the virtual screen tracking input while the OSD is open, but the core never receives it because the OSD intercepts.
+This is caused by the virtual screen tracking input that is being intercepted by the OSD instead of sent to the core.
 
-It's important to note this happens **only** when Deskflow is sending **absolute mouse movements**. To send **relative mouse movements**, you must  **both**:
+This happens only when Deskflow is sending **absolute** mouse movements. To send **relative** mouse movements, you must  **both**:
 
-1. Check **'Enable relative mouse movements'** in the 'Advanced' tab of the **Deskflow server settings**
-2. **Lock the mouse** to the MiSTer screen using **Scroll Lock** (or the configured hotkey)
+1. Check **'Enable relative mouse movements'** in the 'Advanced' tab of the Deskflow server's settings [as outlined above](#use-relative-mouse-movements), AND
+2. **Lock the mouse to the MiSTer screen** using Scroll Lock (or the configured hotkey)
 
-While this behavior disappears completely in relative mode, locking the cursor to a screen isn't always feasible. This fork therefore implements  further mitigation in the form of the `absoluteMovementSlackFactor` configuration parameter.
+While this behavior only affects absolute movements, locking the cursor to a screen isn't always feasible. This fork therefore implements further mitigation:
 
-When receiving absolute movements, the client applies this factor (from `1.0` to `5.0`, default `1.5`) to the core's native resolution to create a margin. The extra space will help avoid invisible walls - the tradeoff being that when you want to move back off the screen in the other direction, you'll have to wade through the jumped values (re-syncing the axis).
+When receiving absolute movements, an `absoluteMovementSlackFactor` from `1.0` to `5.0` (default `1.5`) is applied to the core's native resolution, creating a margin around the screen. This helps avoid invisible walls at a cost of eventually needing to move back through any jumped values in the opposite direction, re-syncing the axis. You can think about the core desktop as being ["pan and scan"](https://en.wikipedia.org/wiki/Pan_and_scan) inside this space, and must balance the desire to avoid invisible walls with your willingness to re-sync at the other side.
 
-When the cursor is locked to the MiSTer screen and relative movements are being sent, the factor is automatically reduced to `1.0` resulting in the core's native resolution.
+When the cursor is locked to the MiSTer screen and relative movements are being sent, this factor is automatically reduced to `1.0` resulting in the core's native resolution.
 
 ### Other issues & limitations
 
-- Clipboard sharing isn't implemented but I believe it will be possible
-- Mouse wheel isn't implemented and may not be possible or may be limited
+- Clipboard sharing is receive-only
+  - Text copied on the Deskflow server can be pasted into MiSTer with `clipboardPasteHotkey` if clipboard sharing is enabled on the server
+- Mouse wheel isn't implemented; it may not be possible or ultimately be limited
 
 ## Troubleshooting
 
