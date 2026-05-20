@@ -169,6 +169,8 @@ remoteHost=192.168.1.100        # CRITICAL: must match the ip or hostname of you
 screenWidthFallback=640         # used until MiSTer core geometry is detected
 screenHeightFallback=480        # used until MiSTer core geometry is detected
 absoluteMovementSlackFactor=1.5 # absolute-mode slack factor around the real framebuffer
+absoluteMovementScaleFactor=0.5 # scale emitted motion generated from absolute positions
+relativeMovementScaleFactor=0.5 # scale emitted direct relative motion
 clipboardPasteHotkey=Super+v    # paste server clipboard text into the active core
 clipboardPasteDelayMs=0         # delay between pasted text keypresses
 clipboardPasteMaxChars=4096     # refuse larger text pastes; 0 disables this limit
@@ -186,7 +188,8 @@ These are the settings most users will want to review:
 
 - `remoteHost`: **You almost certainly need to change this** to the IP address or hostname of your Deskflow server.
 - `screenWidthFallback` and `screenHeightFallback`: Startup fallback size used until Deskflow identifies the loaded MiSTer core from `/tmp/CORENAME`. If the loaded core is not in Deskflow's geometry table, the current geometry remains in use. Geometry changes are sent to the server automatically.
-- `absoluteMovementSlackFactor`: Absolute mouse mode reports a larger virtual screen to the server by this factor, which creates a forgiving edge margin around the real MiSTer framebuffer. Relative mouse mode always reports the exact framebuffer size. Valid range is `1.0` to `5.0`.
+- `absoluteMovementSlackFactor`: Absolute mouse mode reports a larger virtual screen to the server by this factor, creating a forgiving edge margin around the real MiSTer framebuffer. Relative mouse mode always reports the exact framebuffer size. Valid range is `1.0` to `5.0`.
+- `absoluteMovementScaleFactor` and `relativeMovementScaleFactor`: Scale emitted mouse movement without changing the screen geometry reported to the server. Absolute scaling applies to relative uinput deltas generated from absolute Deskflow positions; relative scaling applies to direct relative movements. Valid range is greater than `0.0` through `1.0`, and both default to `0.5`.
 - `clipboardPasteHotkey`: Hotkey used to type server clipboard text into the active core. Defaults to `Super+v`; supports any combination of `Control`, `Alt`, `Shift`, `Super`, and `Meta` plus one key. Set it empty to disable MiSTer paste.
 - `clipboardPasteDelayMs`: Milliseconds to wait between pasted text keypresses. Defaults to `0`, which emits as quickly as the uinput backend can send complete keypresses.
 - `clipboardPasteMaxChars`: Maximum text length accepted for a MiSTer paste. Larger server clipboard text is refused instead of typed. Set to `0` for unlimited paste length.
@@ -280,11 +283,13 @@ This happens only when Deskflow is sending **absolute** mouse movements. To send
 1. Check **'Enable relative mouse movements'** in the 'Advanced' tab of the Deskflow server's settings [as outlined above](#use-relative-mouse-movements), AND
 2. **Lock the mouse to the MiSTer screen** using Scroll Lock (or the configured hotkey)
 
-While this behavior only affects absolute movements, locking the cursor to a screen isn't always feasible. This fork therefore implements further mitigation:
+While this behavior only affects absolute movements, locking the cursor to a screen isn't always feasible. This fork therefore implements some further options to mitigate impact.
 
 When receiving absolute movements, an `absoluteMovementSlackFactor` from `1.0` to `5.0` (default `1.5`) is applied to the core's native resolution, creating a margin around the screen. This helps avoid invisible walls at a cost of eventually needing to move back through any jumped values in the opposite direction, re-syncing the axis. You can think about the core desktop as being ["pan and scan"](https://en.wikipedia.org/wiki/Pan_and_scan) inside this space, and must balance the desire to avoid invisible walls with your willingness to re-sync at the other side.
 
 When the cursor is locked to the MiSTer screen and relative movements are being sent, this factor is automatically reduced to `1.0` resulting in the core's native resolution.
+
+The `absoluteMovementScaleFactor` and `relativeMovementScaleFactor` settings are separate from slack. Slack changes the absolute-mode coordinate space reported to the server, while scale factors reduce the relative uinput movement emitted to MiSTer. Each movement scale factor may be configured independently from greater than `0.0` through `1.0`, to taste and based on the speed of your mouse as used on other screens.
 
 ### Other issues & limitations
 
