@@ -8,16 +8,27 @@ Builds are currently **preview-only** and require a subscription to [patreon.tre
 
 ## Why fork?
 
-Upstream Deskflow is built for desktop operating systems. MiSTer is a much leaner, headless ARM Linux environment. Getting Deskflow running therefore requires a number of platform-specific changes:
+### Architecture & Dependencies
+
+Upstream Deskflow is built for desktop operating systems. MiSTer is a much leaner, headless ARM Linux environment. Getting Deskflow running therefore requires a number of platform-specific changes.
 
 - As MiSTer doesn't provide an X11 or Wayland desktop session, this port implements a new backend.
 - Input has to be injected as synthetic keyboard and mouse devices so the active MiSTer core can see it.
 - The stock MiSTer Linux image is older than the runtime expected by a modern Deskflow build, so this package ships the needed runtime libraries, OpenSSL modules, and XKB data alongside `deskflow-core`.
-- Mouse movement uses a core-specific MiSTer geometry table with config-file values as fallback.
 - Configuration is script-driven as the GUI can't be built without a real windowing system.
 - Deskflow targets 64-bit architecture. Some bugs around this required fixing, there may be more, and I'm not interested in lobbying that this use-case is worth the project reopening 32-bit support.
 
-For these reasons and for efficiency in distributing updates, releases are delivered as a bootstrap script and runtime bundle instead of a single standalone binary.
+### MiSTer-specific features
+
+This fork implements features specific to MiSTer FPGA that don't have any place upstream:
+
+- Dynamic desktop geometry
+  - Mouse movement uses a core-specific MiSTer geometry lookup table and changes desktop resolutions on the fly based on the active core
+- Cursor de-sync [mitigations](#mitigations)
+  - Including a variety of desktop and mouse movement scaling options for tuning to taste
+- Custom [clipboard sharing mechanics](#clipboard-sharing)
+  - Text can be "pasted" from other screens into the MiSTer screen which simulates the needed keypresses with an optional delay between keys.
+  - The most recently written MiSTer screenshot can be pushed to the Deskflow clipboard for convenient pasting on other screens.
 
 ## Pre-requisite: Deskflow server
 
@@ -165,24 +176,30 @@ The installer creates it from the shipped example on first install; later instal
 
 ```ini
 [client]
-remoteHost=192.168.1.100        # CRITICAL: must match the ip or hostname of your server
-screenWidthFallback=640         # used until MiSTer core geometry is detected
-screenHeightFallback=480        # used until MiSTer core geometry is detected
+remoteHost=192.168.1.100             # CRITICAL: must match the ip or hostname of your server
+languageSync=false                   # only true if debugging keyboard layout issues
+
+screenWidthFallback=640              # used until MiSTer core geometry is detected
+screenHeightFallback=480             # used until MiSTer core geometry is detected
+
 absoluteMovementSlackFactor=1.5 # absolute-mode slack factor around the real framebuffer
-absoluteMovementScaleFactorX=0.5 # scale absolute-generated X motion
-absoluteMovementScaleFactorY=0.5 # scale absolute-generated Y motion
+
+absoluteMovementScaleFactorX=0.5     # scale absolute-generated X motion
+absoluteMovementScaleFactorY=0.5     # scale absolute-generated Y motion
 absoluteMovementScaleLowThreshold=1  # absolute motion at/below this uses no dampening
 absoluteMovementScaleHighThreshold=8 # absolute motion at/above this uses full configured scale
-relativeMovementScaleFactorX=0.5 # scale direct relative X motion
-relativeMovementScaleFactorY=0.5 # scale direct relative Y motion
+
+relativeMovementScaleFactorX=0.5     # scale direct relative X motion
+relativeMovementScaleFactorY=0.5     # scale direct relative Y motion
 relativeMovementScaleLowThreshold=1  # relative motion at/below this uses no dampening
 relativeMovementScaleHighThreshold=8 # relative motion at/above this uses full configured scale
-clipboardPasteHotkey=Super+v    # paste server clipboard text into the active core
-clipboardPasteDelayMs=0         # delay between pasted text keypresses
-clipboardPasteMaxChars=4096     # refuse larger text pastes; 0 disables this limit
-screenshotClipboardEnabled=true # publish new MiSTer screenshots to the server clipboard
+
+clipboardPasteHotkey=Super+v         # paste server clipboard text into the active core
+clipboardPasteDelayMs=0              # delay between pasted text keypresses
+clipboardPasteMaxChars=4096          # refuse larger text pastes; 0 disables this limit
+
+screenshotClipboardEnabled=true      # publish new MiSTer screenshots to the server clipboard
 screenshotClipboardDirectory=/media/fat/screenshots # watched screenshot root
-languageSync=false              # only true if debugging keyboard layout issues
 
 [core]
 computerName=mister       # must match a screen on server-side layout
@@ -194,18 +211,22 @@ tlsEnabled=true           # set false if your server has TLS disabled
 
 These are the settings most users will want to review:
 
-- `remoteHost`: **You almost certainly need to change this** to the IP address or hostname of your Deskflow server.
-- `screenWidthFallback` and `screenHeightFallback`: Startup fallback size used until Deskflow identifies the loaded MiSTer core from `/tmp/CORENAME`. If the loaded core is not in Deskflow's geometry table, the current geometry remains in use. Geometry changes are sent to the server automatically.
-- `absoluteMovementSlackFactor`: Absolute mouse mode reports a larger virtual screen to the server by this factor, creating a forgiving edge margin around the real MiSTer framebuffer. Relative mouse mode always reports the exact framebuffer size. Valid range is `1.0` to `5.0`.
-- `absoluteMovementScaleFactorX`, `absoluteMovementScaleFactorY`, `relativeMovementScaleFactorX`, and `relativeMovementScaleFactorY`: Scale emitted mouse movement without changing the screen geometry reported to the server. Absolute scaling applies to relative uinput deltas generated from absolute Deskflow positions; relative scaling applies to direct relative movements. Valid range is greater than `0.0` through `1.0`, and all default to `0.5`.
-- `absoluteMovementScaleLowThreshold`, `absoluteMovementScaleHighThreshold`, `relativeMovementScaleLowThreshold`, and `relativeMovementScaleHighThreshold`: Tune adaptive dampening. Movement at or below the low threshold uses no dampening; movement at or above the high threshold uses the configured X/Y scale. Raise the high threshold to keep small-motion boost active longer, or lower it to reach full dampening sooner.
-- `clipboardPasteHotkey`: Hotkey used to type server clipboard text into the active core. Defaults to `Super+v`; supports any combination of `Control`, `Alt`, `Shift`, `Super`, and `Meta` plus one key. Set it empty to disable MiSTer paste.
-- `clipboardPasteDelayMs`: Milliseconds to wait between pasted text keypresses. Defaults to `0`, which emits as quickly as the uinput backend can send complete keypresses.
-- `clipboardPasteMaxChars`: Maximum text length accepted for a MiSTer paste. Larger server clipboard text is refused instead of typed. Set to `0` for unlimited paste length.
-- `screenshotClipboardEnabled`: When `true`, Deskflow watches MiSTer's screenshot directory and publishes newly written screenshots as bitmap clipboard data to the server.
-- `screenshotClipboardDirectory`: Root directory watched for MiSTer screenshots. Defaults to `/media/fat/screenshots`; change it only if your MiSTer setup writes screenshots elsewhere.
-- `computerName`: The MiSTer screen name. This must match a screen name configured in your Deskflow server layout.
-- `port`: Leave this at `24800` unless your Deskflow server uses a different port.
+- Networking
+  - `remoteHost`: **You almost certainly need to change this** to the IP address or hostname of your Deskflow server.
+  - `computerName`: The MiSTer screen name. This must match a screen name configured in your Deskflow server layout.
+  - `port`: Leave this at `24800` unless your Deskflow server uses a different port.
+- Desktop geometry
+  - `screenWidthFallback` and `screenHeightFallback`: Startup fallback size used until Deskflow identifies the loaded MiSTer core from `/tmp/CORENAME`. If the loaded core is not in Deskflow's geometry table, the current geometry remains in use. Geometry changes are sent to the server automatically.
+  - `absoluteMovementSlackFactor`: Absolute mouse mode reports a larger virtual screen to the server by this factor, creating a forgiving edge margin around the real MiSTer framebuffer. Relative mouse mode always reports the exact framebuffer size. Valid range is `1.0` to `5.0`.
+  - `absoluteMovementScaleFactorX/Y` and `relativeMovementScaleFactorX/Y`: Scale emitted mouse movement without changing the screen geometry reported to the server. Absolute scaling applies to relative uinput deltas generated from absolute Deskflow positions; relative scaling applies to direct relative movements. Valid range is greater than `0.0` through `1.0`, and all default to `0.5`.
+  - `absoluteMovementScaleLow/HighThreshold` and `relativeMovementScaleLow/HighThreshold`: Tune adaptive dampening. Movement at or below the low threshold uses no dampening; movement at or above the high threshold uses the configured X/Y scale. Raise the high threshold to keep small-motion boost active longer, or lower it to reach full dampening sooner.
+- Clipboard paste (text) functionality
+  - `clipboardPasteHotkey`: Hotkey used to type server clipboard text into the active core. Defaults to `Super+v`; supports any combination of `Control`, `Alt`, `Shift`, `Super`, and `Meta` plus one key. Set it empty to disable MiSTer paste.
+  - `clipboardPasteDelayMs`: Milliseconds to wait between pasted text keypresses. Defaults to `0`, which emits as quickly as the uinput backend can send complete keypresses.
+  - `clipboardPasteMaxChars`: Maximum text length accepted for a MiSTer paste. Larger server clipboard text is refused instead of typed. Set to `0` for unlimited paste length.
+- MiSTer screenshot export functionality
+  - `screenshotClipboardEnabled`: When `true`, Deskflow watches MiSTer's screenshot directory and publishes newly written screenshots as bitmap clipboard data to the server.
+  - `screenshotClipboardDirectory`: Root directory watched for MiSTer screenshots. Defaults to `/media/fat/screenshots`; change it only if your MiSTer setup writes screenshots elsewhere.
 
 ## TLS and verification
 
@@ -266,6 +287,20 @@ The selected mode is stored in:
 
 `deskflow start`, `deskflow run`, and autostart all respect the saved mode.
 
+## Clipboard sharing
+
+As MiSTer-deskflow is unable to hook the actual clipboard of a running core (if one even exists), traditional clipboard sharing isn't an option. The channel has been reused however for different but useful implementations:
+
+### Text paste into MiSTer core
+
+Text copied on the Deskflow server can be pasted into MiSTer with `clipboardPasteHotkey` (default `Super+V`) if clipboard sharing is enabled on the server. See options `clipboardPasteHotkey`, `clipboardPasteDelayMs`, and `clipboardPasteMaxChars`.
+
+### Screenshot export
+
+When `screenshotClipboardEnabled=true`, new `.png` or `.bmp` files under `screenshotClipboardDirectory` are also published back to the server clipboard as bitmap data. Use MiSTer's normal screenshot hotkey: `Super+PrtScr` for capture from the scaler and `Shift+Super+PrtScr` for capture from the framebuffer. Deskflow only watches the files MiSTer writes and does not trigger screenshots itself.
+
+Deskflow's bitmap clipboard format is uncompressed, so screenshots can be much larger than their PNG files. **The Deskflow server defaults to a 3 MiB clipboard sharing limit which is likely to reject scaled HD screenshots.** Set the size limit to at least `8 MB` for 1920x1080 screenshots and `16 MB` for larger, or set `screenshotClipboardEnabled=false` if you do not want screenshot clipboard uploads.
+
 ## Usability tips
 
 - You can lock the mouse (and keyboard) to the active screen using **Scroll Lock** (default), or remap as needed.
@@ -289,12 +324,12 @@ An inherent limitation of substituting an actual window manager with a virtual s
 
 This is caused by the virtual screen tracking input that is being intercepted by the OSD instead of sent to the core.
 
-This happens only when Deskflow is sending **absolute** mouse movements. To send **relative** mouse movements, you must  **both**:
+This happens only when Deskflow is sending **absolute** mouse movements. To send **relative** mouse movements, you must **both**:
 
-1. Check **'Enable relative mouse movements'** in the 'Advanced' tab of the Deskflow server's settings [as outlined above](#use-relative-mouse-movements), AND
+1. Check **'Use relative mouse movements'** in the 'Advanced' tab of the Deskflow server's settings [as outlined in SERVER_SETUP.md](SERVER_SETUP.md#use-relative-mouse-movements), AND
 2. **Lock the mouse to the MiSTer screen** using Scroll Lock (or the configured hotkey)
 
-While this behavior only affects absolute movements, locking the cursor to a screen isn't always feasible. This fork therefore implements some further options to mitigate impact.
+While this behavior only affects absolute movements, locking the cursor to a screen isn't always feasible. <a id="mitigations"></a>This fork therefore implements some further options to mitigate impact.
 
 When receiving absolute movements, an `absoluteMovementSlackFactor` from `1.0` to `5.0` (default `1.5`) is applied to the core's native resolution, creating a margin around the screen. This helps avoid invisible walls at a cost of eventually needing to move back through any jumped values in the opposite direction, re-syncing the axis. You can think about the core desktop as being ["pan and scan"](https://en.wikipedia.org/wiki/Pan_and_scan) inside this space, and must balance the desire to avoid invisible walls with your willingness to re-sync at the other side.
 
@@ -307,14 +342,6 @@ The `absoluteMovementScaleFactorX/Y` and `relativeMovementScaleFactorX/Y` settin
 #### Keyboard support
 
 Keyboard support is currently US-biased through nature of my inexperience with other keymaps. If you use a Deskflow server and/or keyboard in other languages or layouts and experience issues (likely), I'd appreciate you reporting them so I can offer better support.
-
-#### Clipboard sharing
-
-Text copied on the Deskflow server can be pasted into MiSTer with `clipboardPasteHotkey` (default `Super+V`) if clipboard sharing is enabled on the server.
-
-When `screenshotClipboardEnabled=true`, new `.png` or `.bmp` files under `screenshotClipboardDirectory` are also published back to the server clipboard as bitmap data. Use MiSTer's normal screenshot hotkey; Deskflow only watches the files MiSTer writes and does not trigger screenshots itself.
-
-Deskflow's bitmap clipboard format is uncompressed, so screenshots can be much larger than their PNG files. The Deskflow server defaults to a 3 MiB clipboard sharing limit, which may reject scaled HD screenshots. Increase the server clipboard sharing limit or set `screenshotClipboardEnabled=false` if you do not want screenshot clipboard uploads.
 
 #### Mouse wheel
 
