@@ -174,6 +174,8 @@ relativeMovementScaleFactor=0.5 # scale emitted direct relative motion
 clipboardPasteHotkey=Super+v    # paste server clipboard text into the active core
 clipboardPasteDelayMs=0         # delay between pasted text keypresses
 clipboardPasteMaxChars=4096     # refuse larger text pastes; 0 disables this limit
+screenshotClipboardEnabled=true # publish new MiSTer screenshots to the server clipboard
+screenshotClipboardDirectory=/media/fat/screenshots # watched screenshot root
 languageSync=false              # only true if debugging keyboard layout issues
 
 [core]
@@ -193,6 +195,8 @@ These are the settings most users will want to review:
 - `clipboardPasteHotkey`: Hotkey used to type server clipboard text into the active core. Defaults to `Super+v`; supports any combination of `Control`, `Alt`, `Shift`, `Super`, and `Meta` plus one key. Set it empty to disable MiSTer paste.
 - `clipboardPasteDelayMs`: Milliseconds to wait between pasted text keypresses. Defaults to `0`, which emits as quickly as the uinput backend can send complete keypresses.
 - `clipboardPasteMaxChars`: Maximum text length accepted for a MiSTer paste. Larger server clipboard text is refused instead of typed. Set to `0` for unlimited paste length.
+- `screenshotClipboardEnabled`: When `true`, Deskflow watches MiSTer's screenshot directory and publishes newly written screenshots as bitmap clipboard data to the server.
+- `screenshotClipboardDirectory`: Root directory watched for MiSTer screenshots. Defaults to `/media/fat/screenshots`; change it only if your MiSTer setup writes screenshots elsewhere.
 - `computerName`: The MiSTer screen name. This must match a screen name configured in your Deskflow server layout.
 - `port`: Leave this at `24800` unless your Deskflow server uses a different port.
 
@@ -299,7 +303,11 @@ Keyboard support is currently US-biased through nature of my inexperience with o
 
 #### Clipboard sharing
 
-Clipboard sharing is receive-only. Text copied on the Deskflow server can be pasted into MiSTer with `clipboardPasteHotkey` (default `Super+V`) if clipboard sharing is enabled on the server.
+Text copied on the Deskflow server can be pasted into MiSTer with `clipboardPasteHotkey` (default `Super+V`) if clipboard sharing is enabled on the server.
+
+When `screenshotClipboardEnabled=true`, new `.png` or `.bmp` files under `screenshotClipboardDirectory` are also published back to the server clipboard as bitmap data. Use MiSTer's normal screenshot hotkey; Deskflow only watches the files MiSTer writes and does not trigger screenshots itself.
+
+Deskflow's bitmap clipboard format is uncompressed, so screenshots can be much larger than their PNG files. The Deskflow server defaults to a 3 MiB clipboard sharing limit, which may reject scaled HD screenshots. Increase the server clipboard sharing limit or set `screenshotClipboardEnabled=false` if you do not want screenshot clipboard uploads.
 
 #### Mouse wheel
 

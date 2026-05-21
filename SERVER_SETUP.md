@@ -24,11 +24,13 @@ The MiSTer client connects to a server that runs on the computer with your keybo
 
 <img width="447" height="322" alt="Step 6: Click 'Advanced'" src="https://github.com/user-attachments/assets/d1475df5-76b4-4db7-9ea2-b7bf998e0b11" />
 
-7. Check `Use relative mouse movements` then click `OK`.
+7. Check `Use relative mouse movements`.
 
 <img width="446" height="317" alt="Step 7: Check 'use relative mouse movements'" src="https://github.com/user-attachments/assets/cb2d6b5c-b1de-4a87-ad8a-21b239479bb0" />
 
-8. Note the IP of your server as it's needed for MiSTer-side setup, then click `Start`.
+8. This fork provides some useful clipboard functions; enable it here if you wish to use them. If you want MiSTer screenshots to populate the server clipboard, set the size limit to at least `8 MB` for 1920x1080 screenshots and `16 MB` for larger. Click `OK` regardless of your choices.
+
+9. Note the IP of your server as it's needed for MiSTer-side setup, then click `Start`.
 
 <img width="429" height="174" alt="Step 6: Note IP and click 'Start'" src="https://github.com/user-attachments/assets/afeb8606-42b9-492a-b2a3-787fce2fd3fe" />
 
