@@ -112,7 +112,7 @@ The MiSTer client connects to a server that runs on the computer with your keybo
 
    ```sh
    deskflow install
-   deskflow configure-from-cli
+   deskflow configure
    deskflow start
    ```
 
@@ -149,8 +149,7 @@ Run `deskflow help` at any time for built-in usage text.
 | `run`                   | Run the MiSTer Deskflow client in the foreground with console output.            |
 | `restart`               | Restart the MiSTer Deskflow client.                                              |
 | `stop`                  | Stop any running Deskflow client process.                                        |
-| `configure`             | GUI configuration. (not yet implemented)                                         |
-| `configure-from-cli`    | Open the config file in a text editor such as `nano` or `vi`.                    |
+| `configure`             | Open the config file in a text editor such as `nano` or `vi`.                    |
 | `trust <FINGERPRINT>`   | Trust a Deskflow server fingerprint.                                             |
 | `untrust <FINGERPRINT>` | Remove a trusted Deskflow server fingerprint.                                    |
 | `set-trust-mode <MODE>` | Persist `strict`, `tofu`, or `promiscuous` for future starts and autostarts.     |

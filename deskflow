@@ -25,7 +25,7 @@ ENTRYPOINT_PATH="$(resolve_entrypoint_path || printf '%s\n' "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${ENTRYPOINT_PATH}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow-dist}"
 PREVIEW_RELEASE_REPO="treyturner/MiSTer-deskflow-dist-preview"
-DESKFLOW_ENTRYPOINT_SHA256="0128e0c2b8a25951efcff31e859064c218f01bdab01024f85e6beeb27c52cdf7"
+DESKFLOW_ENTRYPOINT_SHA256="1e0a72a7c67054dab15272be371c39ec466bab7f3ea07a4fa85f52f4bd567d07"
 DESKFLOW_UPDATE_INTERVAL_SECONDS=86400
 
 info() { printf '%s\n' "$*"; }
@@ -3410,8 +3410,7 @@ show_help() {
     printf '  run                  Run Deskflow in foreground with console logs\n'
     printf '  restart              Restart Deskflow\n'
     printf '  stop                 Stop Deskflow\n'
-    printf '  configure            Open GUI configuration (not yet implemented)\n'
-    printf '  configure-from-cli   Edit deskflow.conf in a text editor\n'
+    printf '  configure            Edit deskflow.conf in a text editor\n'
     printf '  trust                Trust a server fingerprint\n'
     printf '  untrust              Remove a trusted server fingerprint\n'
     printf '  set-trust-mode       Persist strict, tofu, or promiscuous for future launches\n'
@@ -3804,11 +3803,6 @@ case "${command}" in
     ;;
 
   configure)
-    info "GUI configuration not yet available. A text editor can be opened using:"
-    info "${ENTRYPOINT_PATH} configure-from-cli"
-    ;;
-
-  configure-from-cli)
     editor=$(find_text_editor) || die "No text editor found; install nano or vi, or set \$EDITOR"
     exec "${editor}" "${INSTALL_DIR}/deskflow.conf"
     ;;
