@@ -25,7 +25,7 @@ ENTRYPOINT_PATH="$(resolve_entrypoint_path || printf '%s\n' "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${ENTRYPOINT_PATH}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow-dist}"
 PREVIEW_RELEASE_REPO="treyturner/MiSTer-deskflow-dist-preview"
-DESKFLOW_ENTRYPOINT_SHA256="1e0a72a7c67054dab15272be371c39ec466bab7f3ea07a4fa85f52f4bd567d07"
+DESKFLOW_ENTRYPOINT_SHA256="a7fb7a147ef3ef01d47689afd504487415a5bd6e1ee0f3f405f7aece14660ec6"
 DESKFLOW_UPDATE_INTERVAL_SECONDS=86400
 
 info() { printf '%s\n' "$*"; }
@@ -112,6 +112,17 @@ self_update_write_marker() {
   fi
 }
 
+self_update_force_requested() {
+  case "${1:-}" in
+    install|update)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 self_update_read_sha256() {
   local file=$1
 
@@ -137,7 +148,9 @@ self_update_entrypoint() {
 
   [[ "${DESKFLOW_SELF_UPDATE_ATTEMPTED:-0}" != "1" ]] || return 0
   [[ ! -f "${SCRIPT_DIR}/patreage-download.sh" ]] || return 0
-  self_update_should_defer && return 0
+  self_update_force_requested "${1:-}" || {
+    self_update_should_defer && return 0
+  }
 
   work_dir="$(mktemp -d 2>/dev/null)" || return 0
   remote_sha_file="${work_dir}/deskflow.sha256"
