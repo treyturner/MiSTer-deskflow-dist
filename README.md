@@ -23,12 +23,14 @@ Upstream Deskflow is built for desktop operating systems. MiSTer is a much leane
 This fork implements some MiSTER-specific features that don't have any place upstream:
 
 - Dynamic desktop geometry
-  - Mouse movement uses a core-specific MiSTer geometry lookup table and changes desktop resolutions on the fly based on the active core
+  - Mouse movement uses a MiSTer geometry lookup table
+  - Desktop resolution changes on the on the fly based on the active core
 - Cursor de-sync [mitigations](#mitigations)
-  - Including a variety of desktop and mouse movement scaling options for tuning to taste
+  - A `1`-`5`x "slack factor" around the desktop to help avoid invisible walls when in absolute mode
+  - X/Y independent scale factors > 0 and < 1.0 with adaptive tuning controls for each mode: absolute and relative
 - Custom [clipboard sharing mechanics](#clipboard-sharing)
-  - Text can be "pasted" from other screens into the MiSTer screen which simulates the needed keypresses with an optional delay between keys.
-  - The most recently written MiSTer screenshot can be pushed to the Deskflow clipboard for convenient pasting on other screens.
+  - Text can be "pasted" from other screens into the MiSTer, simulating the needed keypresses with an optional delay between keys
+  - The most recently written MiSTer screenshot can be pushed to the Deskflow clipboard for pasting on other screens
 
 ## Pre-requisite: Configure and start Deskflow server
 
@@ -182,6 +184,7 @@ deskflow configure
 ```
 
 Default config values are:
+
 ```ini
 [client]
 remoteHost=192.168.1.100             # must match the ip or hostname of your server
@@ -207,14 +210,14 @@ clipboardPasteDelayMs=0              # delay between pasted text keypresses
 clipboardPasteMaxChars=4096          # refuse larger text pastes; 0 for no limit
 
 screenshotClipboardEnabled=true      # publish new MiSTer screenshots to the server clipboard
-screenshotClipboardDirectory=/media/fat/screenshots   # watched screenshot root
+screenshotClipboardDirectory=/media/fat/screenshots  # watched screenshot root
 
 [core]
-computerName=mister       # must match a screen on server-side layout
-port=24800                # only change if your server listens on a non-standard port
+computerName=mister                  # must match a screen on server-side layout
+port=24800                           # only change if your server listens on a non-standard port
 
 [security]
-tlsEnabled=true           # set false if your server has TLS disabled
+tlsEnabled=true                      # set false if your server has TLS disabled
 ```
 
 These are the settings most users will want to review:
