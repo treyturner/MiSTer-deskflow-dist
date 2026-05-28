@@ -334,9 +334,9 @@ An inherent limitation of substituting an actual window manager with a virtual s
 4. Close the MiSTer OSD
 5. Try to move in the same direction. Doh! 🤦‍♂️ Invisible wall.
 
-This case is caused by the virtual screen tracking input that's being intercepted by the OSD instead of sent to the core, but desyncs can potentially occur while translating _any_ absolute movement between Deskflow and core.
+This case is caused by the virtual screen tracking input that's being intercepted by the OSD instead of sent to the core, but desyncs can potentially occur while translating _any_ absolute movement between Deskflow and a core.
 
-#### Use relative movements
+#### Guaranteed fix: use relative movements
 
 It's important to note this happens only when Deskflow is sending **absolute** mouse movements. To send **relative** mouse movements, you must **both**:
 
