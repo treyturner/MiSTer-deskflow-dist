@@ -193,15 +193,15 @@ languageSync=false                   # only true if debugging keyboard layout is
 screenWidthFallback=640              # used until MiSTer core geometry is detected
 screenHeightFallback=480             # used until MiSTer core geometry is detected
 
-absoluteMovementSlackFactor=1.5      # slack around the framebuffer when in absolute mode
+absoluteMovementSlackFactor=3.0      # slack around the framebuffer when in absolute mode
 
-absoluteMovementScaleFactorX=0.5     # scale absolute-generated X motion
-absoluteMovementScaleFactorY=0.5     # scale absolute-generated Y motion
+absoluteMovementScaleFactorX=0.333   # scale absolute-generated X motion
+absoluteMovementScaleFactorY=0.333   # scale absolute-generated Y motion
 absoluteMovementScaleLowThreshold=1  # absolute motion at/below this uses no dampening
 absoluteMovementScaleHighThreshold=8 # absolute motion at/above this uses full configured scale
 
-relativeMovementScaleFactorX=0.5     # scale direct relative X motion
-relativeMovementScaleFactorY=0.5     # scale direct relative Y motion
+relativeMovementScaleFactorX=0.333   # scale direct relative X motion
+relativeMovementScaleFactorY=0.333   # scale direct relative Y motion
 relativeMovementScaleLowThreshold=1  # relative motion at/below this uses no dampening
 relativeMovementScaleHighThreshold=8 # relative motion at/above this uses full configured scale
 
@@ -230,7 +230,7 @@ These are the settings most users will want to review:
   - `screenWidthFallback` and `screenHeightFallback`: Startup fallback size used until Deskflow identifies the loaded MiSTer core from `/tmp/CORENAME`. If the loaded core is not in Deskflow's geometry table, the current geometry remains in use. Geometry changes are sent to the server automatically.
   - `absoluteMovementSlackFactor`: Absolute mouse mode reports a larger virtual screen to the server by this factor, creating a forgiving edge margin around the real MiSTer framebuffer. Relative mouse mode always reports the exact framebuffer size. Valid range is `1.0` to `5.0`.
 - Mouse tuning
-  - `absoluteMovementScaleFactorX/Y` and `relativeMovementScaleFactorX/Y`: Scale emitted mouse movement. Absolute scaling applies to relative uinput deltas generated from absolute Deskflow positions; relative scaling applies to direct relative movements. Valid range is greater than `0.0` through `1.0`; all default to `0.5`.
+  - `absoluteMovementScaleFactorX/Y` and `relativeMovementScaleFactorX/Y`: Scale emitted mouse movement. Absolute scaling applies to relative uinput deltas generated from absolute Deskflow positions; relative scaling applies to direct relative movements. Valid range is greater than `0.0` through `1.0`; all default to `0.333`.
   - `absoluteMovementScaleLow/HighThreshold` and `relativeMovementScaleLow/HighThreshold`: Tune adaptive dampening. Movement at or below the low threshold uses no dampening; movement at or above the high threshold uses the configured X/Y scale. Raise the high threshold to keep small-motion boost active longer, or lower it to reach full dampening sooner.
 - Clipboard paste (text) functionality
   - `clipboardPasteHotkey`: Hotkey used to type server clipboard text into the active core. Defaults to `Super+v`; supports any combination of `Control`, `Alt`, `Shift`, `Super`, and `Meta` plus one key. Set it empty to disable MiSTer paste.
@@ -347,7 +347,7 @@ While this behavior only affects absolute movements, locking the cursor to a scr
 
 #### Absolute mode slack factor
 
-When receiving absolute movements, an `absoluteMovementSlackFactor` from `1.0` to `5.0` (default `2.0`) is applied to the core's native resolution, creating a margin around the screen. This helps avoid invisible walls at a cost of eventually needing to move back through any jumped values in the opposite direction, re-syncing the axis. You can think about the core desktop as being [pan and scan](https://en.wikipedia.org/wiki/Pan_and_scan) inside this space, and must balance the desire to avoid invisible walls with your willingness to re-sync at the other side.
+When receiving absolute movements, an `absoluteMovementSlackFactor` from `1.0` to `5.0` (default `3.0`) is applied to the core's native resolution, creating a margin around the screen. This helps avoid invisible walls at a cost of eventually needing to move back through any jumped values in the opposite direction, re-syncing the axis. You can think about the core desktop as being [pan and scan](https://en.wikipedia.org/wiki/Pan_and_scan) inside this space, and must balance the desire to avoid invisible walls with your willingness to re-sync at the other side.
 
 When the cursor is locked to the MiSTer screen and relative movements are being sent, this factor is automatically reduced to `1.0` yielding the core's native resolution.
 
