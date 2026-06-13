@@ -1,5 +1,5 @@
 {
-  "channel": "latest",
+  "channel": "v1.26.0",
   "canonical_version": "v1.26.0-145.1",
   "manifest_url": "https://github.com/treyturner/MiSTer-deskflow-dist/releases/download/v1.26.0-145.1/release-manifest.json",
   "updated_at": "2026-06-13T20:44:04Z"
