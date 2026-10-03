@@ -25,7 +25,7 @@ ENTRYPOINT_PATH="$(resolve_entrypoint_path || printf '%s\n' "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${ENTRYPOINT_PATH}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow-dist}"
 PREVIEW_RELEASE_REPO="treyturner/MiSTer-deskflow-dist-preview"
-DESKFLOW_ENTRYPOINT_SHA256="a7fb7a147ef3ef01d47689afd504487415a5bd6e1ee0f3f405f7aece14660ec6"
+DESKFLOW_ENTRYPOINT_SHA256="e0c0ce6c0db04b1b470740dba8c7f9f8bf4f290f540601422fd0f2e02f2ce2e2"
 DESKFLOW_UPDATE_INTERVAL_SECONDS=86400
 
 info() { printf '%s\n' "$*"; }
@@ -3613,8 +3613,25 @@ case "${command}" in
     fi
     channel="${1:-${saved_channel:-latest}}"
 
+    mkdir -p "$(dirname "${INSTALL_DIR}")"
+    install_lock="${INSTALL_DIR}.install-lock"
+    mkdir "${install_lock}" 2>/dev/null || die "Installation already locked: ${install_lock} (remove only after confirming no installer is running)"
     WORK_DIR=$(mktemp -d)
-    trap 'rm -rf "${WORK_DIR}"' EXIT INT TERM
+    staged_install=""
+    previous_install=""
+    cleanup_install() {
+      local result=$?
+      if [[ -n "${previous_install}" && -d "${previous_install}" && ! -d "${INSTALL_DIR}" ]]; then
+        mv "${previous_install}" "${INSTALL_DIR}" || true
+      fi
+      [[ -z "${staged_install}" ]] || rm -rf "${staged_install}"
+      rm -rf "${WORK_DIR}"
+      rmdir "${install_lock}" || true
+      return "${result}"
+    }
+    trap cleanup_install EXIT
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
 
     if is_preview_channel "${channel}"; then
       ensure_preview_auth
@@ -3687,24 +3704,50 @@ case "${command}" in
     fi
 
     # ---------------------------------------------------------------------------
-    # Extract app archive directly to INSTALL_DIR
+    # Stage the entire installation before stopping or replacing the working one.
+    # Keep config, trust databases, and track markers when reusing runtime/XKB.
     # ---------------------------------------------------------------------------
 
-    # Stop any running deskflow-core before replacing binaries
-    terminate || true
+    mkdir -p "$(dirname "${INSTALL_DIR}")"
+    staged_install=$(mktemp -d "${INSTALL_DIR}.new.XXXXXX")
+    if [[ -d "${INSTALL_DIR}" ]]; then
+      cp -a "${INSTALL_DIR}/." "${staged_install}/"
+    fi
+    info "Preparing installation in ${staged_install}"
+    tar -xzf "${tmp_app}" -C "${staged_install}" --strip-components=1
+    INSTALL_DIR="${staged_install}" bash "${staged_install}/install-deskflow" "${manifest_url}"
+    printf '%s' "${channel}" > "${staged_install}/.channel"
+    printf '%s' "${canonical_version}" > "${staged_install}/.installed-version"
 
-    mkdir -p "${INSTALL_DIR}"
-    info "Extracting app archive to ${INSTALL_DIR}"
-    tar -xzf "${tmp_app}" -C "${INSTALL_DIR}" --strip-components=1
+    restart_after_install=0
+    if terminate; then
+      restart_after_install=1
+    fi
+    # Settings or TOFU state may have changed while archives were downloading.
+    # Refresh those mutable files after the client has stopped.
+    for state_path in deskflow.conf tls .trust-mode; do
+      if [[ -e "${INSTALL_DIR}/${state_path}" ]]; then
+        rm -rf "${staged_install:?}/${state_path}"
+        cp -a "${INSTALL_DIR}/${state_path}" "${staged_install}/${state_path}"
+      fi
+    done
+    if [[ -d "${INSTALL_DIR}" ]]; then
+      previous_install=$(mktemp -d "${INSTALL_DIR}.previous.XXXXXX")
+      rmdir "${previous_install}"
+      mv "${INSTALL_DIR}" "${previous_install}"
+    fi
+    mv "${staged_install}" "${INSTALL_DIR}"
+    staged_install=""
+    if [[ -n "${previous_install}" ]]; then
+      info "Previous installation retained at ${previous_install}"
+    fi
+    if ((restart_after_install)); then
+      info "Installed ${canonical_version}. Restarting service..."
+      start_background
+    else
+      info "Installed ${canonical_version}. Start it with: deskflow start"
+    fi
 
-    # ---------------------------------------------------------------------------
-    # Delegate to the now-installed installer for runtime/xkb
-    # ---------------------------------------------------------------------------
-
-    bash "${INSTALL_DIR}/install-deskflow" "${manifest_url}"
-
-    printf '%s' "${channel}"           > "${INSTALL_DIR}/.channel"
-    printf '%s' "${canonical_version}" > "${INSTALL_DIR}/.installed-version"
     ;;
 
   remove)
@@ -3755,10 +3798,6 @@ case "${command}" in
 
   update)
     channel=$(cat "${INSTALL_DIR}/.channel")
-    was_running=0
-    if running_core_pid >/dev/null; then
-      was_running=1
-    fi
 
     info "Checking channel '${channel}' for updates..."
 
@@ -3791,10 +3830,6 @@ case "${command}" in
         info "No version record found; reinstalling ${available_version}..."
       fi
       "${ENTRYPOINT_PATH}" install "${channel}"
-      if ((was_running)); then
-        info "Restarting service..."
-        start_background
-      fi
     fi
     ;;
 
