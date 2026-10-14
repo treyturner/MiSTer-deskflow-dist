@@ -25,8 +25,11 @@ ENTRYPOINT_PATH="$(resolve_entrypoint_path || printf '%s\n' "$0")"
 SCRIPT_DIR="$(cd "$(dirname "${ENTRYPOINT_PATH}")" && pwd)"
 INSTALL_DIR="${INSTALL_DIR:-/media/fat/Scripts/deskflow-dist}"
 PREVIEW_RELEASE_REPO="treyturner/MiSTer-deskflow-dist-preview"
-DESKFLOW_ENTRYPOINT_SHA256="e0c0ce6c0db04b1b470740dba8c7f9f8bf4f290f540601422fd0f2e02f2ce2e2"
+DESKFLOW_ENTRYPOINT_SHA256="58dcbe79fcfdb03443cf53279971cd1ae551175d2901f5561cbb5d1fe46d952a"
 DESKFLOW_UPDATE_INTERVAL_SECONDS=86400
+# Background client output goes to tmpfs, not the SD card, and is replaced on each start.
+DESKFLOW_LOG_FILE="${DESKFLOW_LOG_FILE:-/tmp/deskflow.log}"
+DESKFLOW_START_CHECK_SECONDS="${DESKFLOW_START_CHECK_SECONDS:-2}"
 
 info() { printf '%s\n' "$*"; }
 error() { printf '%s\n' "$*" >&2; }
@@ -131,12 +134,15 @@ self_update_read_sha256() {
     | tr '[:upper:]' '[:lower:]'
 }
 
-self_update_embedded_sha256() {
+# The published identity is the SHA-256 of the script with its own identity
+# line reset to "dev" (package.sh brand_entrypoint_script, verify-release.py).
+self_update_identity_sha256() {
   local file=$1
+  local sha=$2
+  local marker="DESKFLOW_ENTRYPOINT_SHA256=\"${sha}\""
 
-  sed -n 's/^DESKFLOW_ENTRYPOINT_SHA256="\([[:xdigit:]]\{64\}\)".*$/\1/p' "${file}" 2>/dev/null \
-    | head -1 \
-    | tr '[:upper:]' '[:lower:]'
+  [[ "$(grep -c "^${marker}\$" "${file}" 2>/dev/null)" == 1 ]] || return 1
+  sed "s/^${marker}\$/DESKFLOW_ENTRYPOINT_SHA256=\"dev\"/" "${file}" | sha256sum | cut -d' ' -f1
 }
 
 self_update_entrypoint() {
@@ -144,7 +150,6 @@ self_update_entrypoint() {
   local remote_sha_file=""
   local remote_script=""
   local remote_sha=""
-  local embedded_sha=""
 
   [[ "${DESKFLOW_SELF_UPDATE_ATTEMPTED:-0}" != "1" ]] || return 0
   [[ ! -f "${SCRIPT_DIR}/patreage-download.sh" ]] || return 0
@@ -154,7 +159,6 @@ self_update_entrypoint() {
 
   work_dir="$(mktemp -d 2>/dev/null)" || return 0
   remote_sha_file="${work_dir}/deskflow.sha256"
-  remote_script="${work_dir}/deskflow"
 
   if ! curl -fsSL --retry 3 -o "${remote_sha_file}" "https://raw.githubusercontent.com/treyturner/MiSTer-deskflow-dist/main/deskflow.sha256" >/dev/null 2>&1; then
     rm -rf "${work_dir}"
@@ -173,27 +177,24 @@ self_update_entrypoint() {
     return 0
   fi
 
-  if ! curl -fsSL --retry 3 -o "${remote_script}" "https://raw.githubusercontent.com/treyturner/MiSTer-deskflow-dist/main/deskflow" >/dev/null 2>&1; then
+  # Download next to the entrypoint so the final mv is a rename: a copy from
+  # tmpfs could leave a truncated entrypoint if it were interrupted.
+  remote_script="$(mktemp "$(dirname "${ENTRYPOINT_PATH}")/.deskflow.update.XXXXXX" 2>/dev/null)" || {
     rm -rf "${work_dir}"
     return 0
-  fi
-  if [[ ! -s "${remote_script}" ]]; then
-    rm -rf "${work_dir}"
-    return 0
-  fi
-  if ! bash -n "${remote_script}" >/dev/null 2>&1; then
-    rm -rf "${work_dir}"
-    return 0
-  fi
-
-  embedded_sha="$(self_update_embedded_sha256 "${remote_script}")"
-  if [[ "${embedded_sha}" != "${remote_sha}" ]]; then
+  }
+  if ! curl -fsSL --retry 3 -o "${remote_script}" "https://raw.githubusercontent.com/treyturner/MiSTer-deskflow-dist/main/deskflow" >/dev/null 2>&1 \
+    || [[ ! -s "${remote_script}" ]] \
+    || ! bash -n "${remote_script}" >/dev/null 2>&1 \
+    || [[ "$(self_update_identity_sha256 "${remote_script}" "${remote_sha}")" != "${remote_sha}" ]]; then
+    rm -f "${remote_script}"
     rm -rf "${work_dir}"
     return 0
   fi
 
   chmod 0755 "${remote_script}" 2>/dev/null || true
   if ! mv -f "${remote_script}" "${ENTRYPOINT_PATH}" 2>/dev/null; then
+    rm -f "${remote_script}"
     rm -rf "${work_dir}"
     return 0
   fi
@@ -3428,8 +3429,8 @@ show_help() {
     printf '  untrust              Remove a trusted server fingerprint\n'
     printf '  set-trust-mode       Persist strict, tofu, or promiscuous for future launches\n'
     printf '  show-trust           Show current trust mode and trusted fingerprints\n'
-    printf '  enable-autostart     Enable automatic start/stop on network up/down\n'
-    printf '  disable-autostart    Disable automatic start/stop on network up/down\n'
+    printf '  enable-autostart     Start Deskflow automatically when the network comes up\n'
+    printf '  disable-autostart    Disable automatic start\n'
     printf '  remove               Stop and uninstall Deskflow\n'
     printf '  status               Show channel, version, service state, and bundle info\n'
     printf '  preview-login        Sign in with Patreon and verify preview access\n'
@@ -3572,15 +3573,28 @@ terminate() {
 start_background() {
   local existing_pid
   local started_pid
+  local waited=0
 
   if existing_pid=$(running_core_pid); then
     info "Deskflow is already running in PID ${existing_pid}."
     return 0
   fi
 
-  "${INSTALL_DIR}/run-deskflow" "$@" </dev/null >/dev/null 2>&1 &
+  DESKFLOW_SILENT=0 "${INSTALL_DIR}/run-deskflow" "$@" </dev/null >"${DESKFLOW_LOG_FILE}" 2>&1 &
   started_pid=$!
-  info "Started Deskflow in the background (PID ${started_pid})."
+
+  # Invalid settings or a missing /dev/uinput end the client within a second.
+  while ((waited < DESKFLOW_START_CHECK_SECONDS)); do
+    sleep 1
+    waited=$((waited + 1))
+    if ! kill -0 "${started_pid}" 2>/dev/null; then
+      error "Deskflow exited during startup. Last lines of ${DESKFLOW_LOG_FILE}:"
+      tail -n 20 "${DESKFLOW_LOG_FILE}" >&2 || true
+      return 1
+    fi
+  done
+
+  info "Started Deskflow in the background (PID ${started_pid}). Log: ${DESKFLOW_LOG_FILE}"
 }
 
 command="${1:-}"
@@ -3738,12 +3752,23 @@ case "${command}" in
     fi
     mv "${staged_install}" "${INSTALL_DIR}"
     staged_install=""
+    # Regenerate hooks written by older releases when autostart is enabled.
+    if [[ -f /etc/network/if-up.d/deskflow ]]; then
+      DESKFLOW_ENTRYPOINT="${ENTRYPOINT_PATH}" "${INSTALL_DIR}/manage-deskflow" enable-autostart \
+        || info "Could not refresh autostart hooks; run 'deskflow enable-autostart' again."
+    fi
     if [[ -n "${previous_install}" ]]; then
+      # Each previous installation is a full bundle; keep only the newest.
+      for older_install in "${INSTALL_DIR}".previous.*; do
+        if [[ -d "${older_install}" && "${older_install}" != "${previous_install}" ]]; then
+          rm -rf "${older_install}"
+        fi
+      done
       info "Previous installation retained at ${previous_install}"
     fi
     if ((restart_after_install)); then
       info "Installed ${canonical_version}. Restarting service..."
-      start_background
+      start_background || die "Installed ${canonical_version}, but Deskflow did not stay running."
     else
       info "Installed ${canonical_version}. Start it with: deskflow start"
     fi
@@ -3762,7 +3787,13 @@ case "${command}" in
       rm -rf "${INSTALL_DIR}"
       info "Removed ${INSTALL_DIR}"
     fi
-    info "Deskflow app, runtime bundles, and hooks are removed."
+    for previous_install in "${INSTALL_DIR}".previous.*; do
+      if [[ -d "${previous_install}" ]]; then
+        rm -rf "${previous_install}"
+        info "Removed ${previous_install}"
+      fi
+    done
+    info "Deskflow app, runtime bundles, previous installations, and hooks are removed."
     info "To further remove this entrypoint, run:"
     info "  rm ${0}"
     ;;
